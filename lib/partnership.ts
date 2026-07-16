@@ -18,6 +18,8 @@ export type PartnershipRequest = {
   status: PartnershipStatus
   admin_notes: string | null
   widget_partner_key: string | null
+  stripe_account_id: string | null
+  stripe_onboarding_complete: boolean | null
   created_at: string
   reviewed_at: string | null
 }
@@ -60,9 +62,10 @@ export function makePartnerKey() {
   return `partner_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`
 }
 
-export function makeWidgetSnippet(partnerKey: string) {
+export function makeWidgetSnippet(partnerKey: string, approvedPercentage: number | string | null = 2) {
   const origin = process.env.NEXT_PUBLIC_TCGPLAYTEST_WIDGET_ORIGIN || "https://testing123-prof.vercel.app"
-  return `<script src="${origin}/partner-widget/widget.js" data-partner-key="${partnerKey}" data-product-name="Premium custom card printing" data-price-cents="2500" data-accent="#16a34a" async></script>`
+  const partnerShareBps = Math.round(Number(approvedPercentage || 2) * 100)
+  return `<script src="${origin}/partner-widget/widget.js" data-partner-key="${partnerKey}" data-product-name="Premium custom card printing" data-partner-share-bps="${partnerShareBps}" data-accent="#16a34a" async></script>`
 }
 
 function toBase64Url(input: string | Buffer) {
@@ -168,10 +171,9 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
 
   const approved = request.status === "approved"
   const senderEmail = process.env.GMAIL_SENDER_EMAIL || "partners@cardify.club"
-  const widgetCode = request.widget_partner_key ? makeWidgetSnippet(request.widget_partner_key) : ""
   const subject = approved ? "Your Cardify partnership is approved" : "Cardify partnership update"
   const text = approved
-    ? `Hi ${request.full_name || request.business_name},\n\nYour Cardify partnership is approved at ${request.approved_percentage ?? request.proposed_percentage}%.\n\nAdd this widget code to your shop:\n\n${widgetCode}\n\nYou can also sign in to your dashboard to track orders and earnings.\n\nCardify`
+    ? `Hi ${request.full_name || request.business_name},\n\nYour Cardify partnership is approved at ${request.approved_percentage ?? request.proposed_percentage}%.\n\nNext step: sign in to your Cardify dashboard and complete Stripe Connect onboarding. Once Stripe confirms the connected account, your dashboard will show the widget code for your shop.\n\nCardify`
     : `Hi ${request.full_name || request.business_name},\n\nThanks for applying to become a Cardify partner. We are not able to approve this application right now.\n\n${request.admin_notes ? `Notes: ${request.admin_notes}\n\n` : ""}Cardify`
 
   const raw = [
