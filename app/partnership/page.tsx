@@ -181,6 +181,7 @@ export default function PartnershipPage() {
                   <p className="text-center font-mono text-xs uppercase tracking-wider text-[#b9cbbc]/60">We review most applications within 2 business days. You'll hear from us by email.</p>
                 </form>
               )}
+              
             </div>
           </div>
         </div>
