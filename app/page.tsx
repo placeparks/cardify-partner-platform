@@ -11,7 +11,7 @@ export default function HomePage() {
             <span className="font-mono text-xs font-medium uppercase tracking-[0.16em] text-[#56ffa8]">Partner Platform Live</span>
           </div>
 
-          <h1 className="max-w-2xl font-sora text-[56px] font-extrabold leading-[1.02] text-[#f4fff3] md:text-[86px]">
+          <h1 className="max-w-2xl text-[44px] font-black leading-[1.08] text-[#f4fff3] md:text-[68px]">
             Custom Printed cards <span className="text-[#00ff9d]">without leaving</span> the platform.
           </h1>
 
@@ -20,8 +20,8 @@ export default function HomePage() {
           </p>
 
           <div className="mt-9 flex flex-wrap gap-4">
-            <Link href="/partnership" className="rounded-lg bg-[#00ff9d] px-8 py-4 font-sora text-2xl font-bold text-[#007143] shadow-[0_0_20px_rgba(0,255,157,0.4)] transition hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(0,255,157,0.6)]">
-              Apply for Partnership
+            <Link href="/partnership" className="rounded-lg bg-[#00ff9d] px-8 py-4 text-xl font-bold text-[#007143] shadow-[0_0_20px_rgba(0,255,157,0.4)] transition hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(0,255,157,0.6)]">
+              Get your own Widget
             </Link>
             <Link href="/dashboard" className="rounded-lg border border-[#3b4a3f] bg-[#191f31] px-8 py-4 font-sora text-2xl font-bold text-[#f4fff3] transition hover:bg-[#23293c]">
               View API Docs
@@ -89,8 +89,8 @@ export default function HomePage() {
 
       <section className="mx-auto grid max-w-[1280px] grid-cols-1 gap-6 px-4 py-24 md:grid-cols-3 md:px-6">
         {[
-          { icon: ShieldCheck, title: "Google verified", body: "Partners sign in with Supabase Google auth before applying. High-security, low-friction onboarding for elite creators.", color: "text-[#f4fff3]" },
-          { icon: ShieldCheck, title: "Admin approval", body: "Authorized emails approve, decline, and set final percentage. We maintain quality through a rigorous vetting process.", color: "text-[#a6e6ff]" },
+          { icon: ShieldCheck, title: "Google verified", body: "Partners sign in wit Google auth before applying. High-security, low-friction onboarding for elite creators.", color: "text-[#f4fff3]" },
+          { icon: ShieldCheck, title: "Admin approval", body: "We maintain quality through a rigorous vetting process.", color: "text-[#a6e6ff]" },
           { icon: Code2, title: "Widget delivery", body: "Approved partners see the code in dashboard and receive it by email. Integration takes minutes, not weeks.", color: "text-[#00ff9d]" },
         ].map((item) => (
           <div key={item.title} className="glass-card rounded-xl border border-[#3b4a3f]/20 p-6 transition hover:border-[#00ff9d]/50">
@@ -150,7 +150,7 @@ export default function HomePage() {
         <h2 className="mb-4 font-sora text-5xl font-extrabold text-[#f4fff3]">Ready to scale your TCG ecosystem?</h2>
         <p className="mx-auto mb-8 max-w-2xl text-[#b9cbbc]">Join the elite network of partners who are redefining the future of digital and physical card gaming through Cardify.</p>
         <Link href="/partnership" className="inline-flex rounded-xl bg-[#00ff9d] px-12 py-5 font-sora text-2xl font-extrabold text-[#007143] shadow-[0_0_30px_rgba(0,255,157,0.4)] transition hover:scale-105">
-          APPLY FOR PARTNERSHIP
+          GET YOUR OWN WIDGET
         </Link>
       </section>
 
