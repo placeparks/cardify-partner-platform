@@ -7,6 +7,7 @@ import { signInWithGoogle } from "@/lib/supabase-browser"
 export default function AdminPage() {
   const [state, setState] = useState<any>({ loading: true, requests: [] })
   const [savingId, setSavingId] = useState("")
+  const [notice, setNotice] = useState("")
 
   async function load() {
     const response = await fetch("/api/admin/partnerships")
@@ -20,11 +21,20 @@ export default function AdminPage() {
 
   async function decide(id: string, status: "approved" | "declined", approvedPercentage?: number, adminNotes?: string) {
     setSavingId(id)
-    await fetch(`/api/admin/partnerships/${id}`, {
+    setNotice("")
+    const response = await fetch(`/api/admin/partnerships/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status, approvedPercentage, adminNotes }),
     })
+    const data = await response.json()
+    if (!response.ok) {
+      setNotice(data.error || "Could not update partnership request.")
+    } else if (data.email?.sent) {
+      setNotice(`${status === "approved" ? "Approved" : "Declined"} and email sent.`)
+    } else {
+      setNotice(`${status === "approved" ? "Approved" : "Declined"}, but email was not sent: ${data.email?.reason || "unknown Gmail error"}`)
+    }
     setSavingId("")
     await load()
   }
@@ -48,6 +58,11 @@ export default function AdminPage() {
     <section className="mx-auto max-w-6xl px-5 py-12">
       <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Admin</p>
       <h1 className="mt-4 text-4xl font-black">Partnership requests</h1>
+      {notice && (
+        <div className="mt-5 border border-cyan/25 bg-ink p-4 text-sm text-slate-200">
+          {notice}
+        </div>
+      )}
 
       <div className="mt-8 grid gap-4">
         {state.requests.map((request: any) => (
