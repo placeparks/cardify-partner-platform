@@ -1,7 +1,6 @@
 "use client"
 
 import { FormEvent, useEffect, useState } from "react"
-import Link from "next/link"
 import { CheckCircle2, LogIn } from "lucide-react"
 import { getSupabaseBrowserClient, signInWithGoogle } from "@/lib/supabase-browser"
 
@@ -9,6 +8,7 @@ export default function PartnershipPage() {
   const [user, setUser] = useState<any>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState("")
+  const [submitted, setSubmitted] = useState(false)
   const [form, setForm] = useState({
     fullName: "",
     businessName: "",
@@ -41,7 +41,7 @@ export default function PartnershipPage() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Could not submit application")
-      setMessage("Application received. We will review it from the admin panel.")
+      setSubmitted(true)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not submit application")
     } finally {
@@ -67,6 +67,15 @@ export default function PartnershipPage() {
         </div>
       </div>
 
+      {submitted ? (
+        <div className="panel flex min-h-[320px] flex-col items-center justify-center p-6 text-center">
+          <CheckCircle2 className="h-12 w-12 text-green" />
+          <h2 className="mt-5 text-3xl font-black">Submitted</h2>
+          <p className="mt-3 max-w-md text-sm leading-6 text-slate-300">
+            Your partnership application has been received. We will review it and email you once there is an update.
+          </p>
+        </div>
+      ) : (
       <form onSubmit={submit} className="panel grid gap-4 p-6">
         {!user ? (
           <div className="border border-cyan/20 bg-ink/70 p-5">
@@ -92,8 +101,8 @@ export default function PartnershipPage() {
         <button disabled={!user || busy} className="button-primary">
           {busy ? "Submitting..." : "Submit application"}
         </button>
-        <Link href="/dashboard" className="text-sm font-semibold text-cyan hover:text-green">Already approved? Open dashboard</Link>
       </form>
+      )}
     </section>
   )
 }
