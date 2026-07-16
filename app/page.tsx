@@ -8,23 +8,23 @@ export default function HomePage() {
         <div className="z-10">
           <div className="mb-4 inline-flex items-center border border-[#00ff9d]/30 bg-[#f4fff3]/10 px-3 py-1">
             <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-[#00ff9d]" />
-            <span className="font-mono text-xs font-medium uppercase tracking-[0.16em] text-[#56ffa8]">Partner Platform Live</span>
+            <span className="font-mono text-xs font-medium uppercase tracking-[0.16em] text-[#56ffa8]">Partner platform - live</span>
           </div>
 
           <h1 className="max-w-2xl text-[44px] font-black leading-[1.08] text-[#f4fff3] md:text-[68px]">
-            Custom Printed cards <span className="text-[#00ff9d]">without leaving</span> the platform.
+            Sell custom printed cards. <span className="text-[#00ff9d]">Without leaving</span> your site.
           </h1>
 
           <p className="mt-7 max-w-xl text-lg leading-8 text-[#b9cbbc]">
-            Partners install a tiny TCGPlaytest-powered checkout widget, customers upload artwork on the partner site, and Cardify tracks orders, revenue, and payouts.
+            Embed the Cardify checkout widget, and your customers upload artwork and pay right on your page. TCGPlaytest prints and ships every order. You set the price; your share is paid out automatically.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-4">
             <Link href="/partnership" className="rounded-lg bg-[#00ff9d] px-8 py-4 text-xl font-bold text-[#007143] shadow-[0_0_20px_rgba(0,255,157,0.4)] transition hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(0,255,157,0.6)]">
-              Get your own Widget
+              Get your widget
             </Link>
-            <Link href="/dashboard" className="rounded-lg border border-[#3b4a3f] bg-[#191f31] px-8 py-4 font-sora text-2xl font-bold text-[#f4fff3] transition hover:bg-[#23293c]">
-              View API Docs
+            <Link href="#how-it-works" className="rounded-lg border border-[#3b4a3f] bg-[#191f31] px-8 py-4 text-xl font-bold text-[#f4fff3] transition hover:bg-[#23293c]">
+              How it works
             </Link>
           </div>
 
@@ -34,7 +34,7 @@ export default function HomePage() {
               <div className="h-10 w-10 rounded-full border-2 border-[#0c1324] bg-[#2e3447]" />
               <div className="h-10 w-10 rounded-full border-2 border-[#0c1324] bg-[#2e3447]" />
             </div>
-            <p className="font-mono text-sm font-medium text-[#b9cbbc]">Trusted by 50+ Elite Gaming Partners</p>
+            <p className="font-mono text-sm font-medium text-[#b9cbbc]">Printing and shipping fulfilled by TCGPlaytest</p>
           </div>
         </div>
 
@@ -58,7 +58,7 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0c1324]/80 to-transparent" />
                 <div className="absolute bottom-2 left-2">
                   <h2 className="font-sora text-2xl font-semibold text-[#f4fff3]">XOE 2.0</h2>
-                  <p className="font-mono text-xs font-medium uppercase tracking-[0.1em] text-[#00ff9d]">Elite print run</p>
+                  <p className="font-mono text-xs font-medium uppercase tracking-[0.1em] text-[#00ff9d]">Live partner order</p>
                 </div>
               </div>
 
@@ -72,7 +72,7 @@ export default function HomePage() {
                     <div className="energy-bar-segment energy-bar-dim" />
                   </div>
                 </div>
-                <p className="text-[11px] italic leading-tight text-[#b9cbbc]">Upload artwork, pay securely, and keep customers on the partner website.</p>
+                <p className="text-[11px] italic leading-tight text-[#b9cbbc]">130 cards - printed and shipped by TCGPlaytest.</p>
                 <div className="mt-4 flex items-end justify-between">
                   <span className="font-mono text-[8px] text-[#b9cbbc]">CARDIFY PARTNER PLATFORM</span>
                   <div className="flex gap-2">
@@ -87,11 +87,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-[1280px] grid-cols-1 gap-6 px-4 py-24 md:grid-cols-3 md:px-6">
+      <section id="how-it-works" className="mx-auto grid max-w-[1280px] grid-cols-1 gap-6 px-4 py-24 md:grid-cols-3 md:px-6">
         {[
-          { icon: ShieldCheck, title: "Google verified", body: "Partners sign in wit Google auth before applying. High-security, low-friction onboarding for elite creators.", color: "text-[#f4fff3]" },
-          { icon: ShieldCheck, title: "Admin approval", body: "We maintain quality through a rigorous vetting process.", color: "text-[#a6e6ff]" },
-          { icon: Code2, title: "Widget delivery", body: "Approved partners see the code in dashboard and receive it by email. Integration takes minutes, not weeks.", color: "text-[#00ff9d]" },
+          { icon: ShieldCheck, title: "Apply with Google", body: "Sign in with Google and tell us about your store. Takes two minutes.", color: "text-[#f4fff3]" },
+          { icon: ShieldCheck, title: "Quick review", body: "We review every application to keep print quality and turnaround high. Most hear back within 2 business days.", color: "text-[#a6e6ff]" },
+          { icon: Code2, title: "Embed and sell", body: "Approved partners get the widget code in their dashboard and by email. Integration is one script tag - minutes, not weeks.", color: "text-[#00ff9d]" },
         ].map((item) => (
           <div key={item.title} className="glass-card rounded-xl border border-[#3b4a3f]/20 p-6 transition hover:border-[#00ff9d]/50">
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[#23293c]">
@@ -107,10 +107,10 @@ export default function HomePage() {
         <div className="glass-card rounded-2xl p-6 md:p-8">
           <div className="flex flex-col gap-8 lg:flex-row">
             <div className="lg:w-1/2">
-              <h2 className="mb-4 font-sora text-4xl font-bold text-[#f4fff3]">Seamless Checkout Widget</h2>
-              <p className="mb-8 text-[#b9cbbc]">Your users never leave your brand. Our lightweight embed handles the complex logistics while you reap the rewards. It's the ultimate TCG-as-a-Service solution.</p>
+              <h2 className="mb-4 font-sora text-4xl font-bold text-[#f4fff3]">A checkout that lives on your site</h2>
+              <p className="mb-8 text-[#b9cbbc]">Your customers never leave your brand. The widget opens right on your page, handles artwork upload, shipping details, and payment - and Cardify takes care of everything after the sale.</p>
               <ul className="mb-8 space-y-4">
-                {["Automatic revenue split tracking", "Universal card format support", "Real-time status updates via email"].map((item) => (
+                {["You set the retail price; your margin is split out automatically", "Artwork upload, shipping, and checkout stay on the partner site", "Order status updates by email and webhook"].map((item) => (
                   <li key={item} className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-[#f4fff3]" />
                     <span className="text-[#dce1fb]">{item}</span>
@@ -147,10 +147,10 @@ export default function HomePage() {
       </section>
 
       <section className="px-4 py-24 text-center">
-        <h2 className="mb-4 font-sora text-5xl font-extrabold text-[#f4fff3]">Ready to scale your TCG ecosystem?</h2>
-        <p className="mx-auto mb-8 max-w-2xl text-[#b9cbbc]">Join the elite network of partners who are redefining the future of digital and physical card gaming through Cardify.</p>
+        <h2 className="mb-4 font-sora text-5xl font-extrabold text-[#f4fff3]">Ready to sell custom printed cards?</h2>
+        <p className="mx-auto mb-8 max-w-2xl text-[#b9cbbc]">Add Cardify to your site, keep customers on your page, and let TCGPlaytest handle printing and shipping.</p>
         <Link href="/partnership" className="inline-flex rounded-xl bg-[#00ff9d] px-12 py-5 font-sora text-2xl font-extrabold text-[#007143] shadow-[0_0_30px_rgba(0,255,157,0.4)] transition hover:scale-105">
-          GET YOUR OWN WIDGET
+          GET YOUR WIDGET
         </Link>
       </section>
 

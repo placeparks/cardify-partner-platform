@@ -6,8 +6,8 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Cardify Partner Platform",
-  description: "Apply for Cardify partnerships, manage widget installs, and track affiliate printing income.",
+  title: "Cardify Partner Platform - Sell custom printed cards on your site",
+  description: "Embed the Cardify checkout on your site, sell custom printed cards at your price, and get paid automatically. Printing and shipping fulfilled by TCGPlaytest.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

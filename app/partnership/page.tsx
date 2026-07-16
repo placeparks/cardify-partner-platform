@@ -64,17 +64,17 @@ export default function PartnershipPage() {
           </div>
 
           <h1 className="font-sora text-4xl font-extrabold leading-tight text-[#dce1fb] md:text-5xl">
-            Bring premium card printing <span className="text-[#00d1ff]">into your platform</span>
+            Get your Cardify widget <span className="text-[#00d1ff]">for your store</span>
           </h1>
           <p className="mt-5 max-w-md text-lg leading-8 text-[#b9cbbc]">
-            Apply with your shop details, preferred revenue percentage, and audience fit. Approved partners unlock the Cardify widget, Stripe onboarding, and live payout tracking.
+            Sign in with Google first - it links your application to your partner account so you can track its status. Approved partners unlock the Cardify widget, Stripe payouts, and live order tracking.
           </p>
 
           <div className="mt-8 space-y-4">
             {[
               { icon: Rocket, title: "Partner checkout", body: "Customers upload artwork and pay without leaving your site." },
-              { icon: BarChart3, title: "Revenue tracking", body: "Dashboard metrics show orders, gross revenue, and your income." },
-              { icon: Code2, title: "Widget delivery", body: "Approved and onboarded partners receive the embed code by email." },
+              { icon: BarChart3, title: "Revenue tracking", body: "Your dashboard shows orders, gross revenue, and your earnings in real time." },
+              { icon: Code2, title: "Widget delivery", body: "Once approved and set up with Stripe, your embed code is in your dashboard and inbox." },
             ].map((item) => (
               <div key={item.title} className="flex items-start gap-4">
                 <div className="glass-panel flex h-12 w-12 items-center justify-center text-[#00d1ff] transition group-hover:scale-110">
@@ -86,6 +86,12 @@ export default function PartnershipPage() {
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="glass-panel mt-10 hidden max-w-xs rotate-[-6deg] overflow-hidden rounded-xl p-3 opacity-80 lg:block">
+            <img src="/partnership.png" alt="Cardify partnership application preview" className="aspect-[3/4] w-full rounded-lg object-cover" />
+            <div className="mt-3 h-1 w-full bg-[#00d1ff]" />
+            <p className="mt-2 font-mono text-[10px] uppercase tracking-widest text-[#00d1ff]">Cardify partner access</p>
           </div>
         </div>
 
@@ -118,7 +124,7 @@ export default function PartnershipPage() {
                 <form onSubmit={submit} className="space-y-6">
                   {!user ? (
                     <div className="border border-[#00d1ff]/20 bg-[#070d1f]/80 p-5">
-                      <p className="text-sm leading-6 text-[#b9cbbc]">Sign in with Google first so we can connect the application to your partner account.</p>
+                      <p className="text-sm leading-6 text-[#b9cbbc]">Sign in with Google first - it links your application to your partner account so you can track its status.</p>
                       <button type="button" onClick={() => signInWithGoogle("/partnership")} className="mt-4 inline-flex items-center gap-2 rounded bg-[#00ff9d] px-5 py-3 font-mono text-xs font-bold uppercase tracking-wider text-[#00391f] transition hover:scale-[1.02]">
                         <LogIn className="h-4 w-4" />
                         Sign in with Google
@@ -143,8 +149,8 @@ export default function PartnershipPage() {
                   </div>
 
                   <label className="grid gap-2">
-                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Business / platform name</span>
-                    <input className="input-recessed p-4 font-mono text-sm uppercase text-[#dce1fb]" required placeholder="YOUR SHOP OR COMMUNITY" value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
+                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Business or store name</span>
+                    <input className="input-recessed p-4 font-mono text-sm uppercase text-[#dce1fb]" required placeholder="YOUR SHOP OR STORE" value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
                   </label>
 
                   <label className="grid gap-2">
@@ -153,25 +159,26 @@ export default function PartnershipPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Suggested partner percentage</span>
+                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Proposed revenue share (%)</span>
                     <div className="flex items-center gap-3">
                       <input className="input-recessed w-full p-4 font-mono text-sm text-[#dce1fb]" required min="0" max="30" step="0.1" type="number" value={form.proposedPercentage} onChange={(event) => setForm({ ...form, proposedPercentage: event.target.value })} />
                       <span className="border border-[#00d1ff]/20 bg-[#070d1f]/80 px-4 py-4 font-mono text-sm text-[#00d1ff]">%</span>
                     </div>
+                    <span className="text-xs leading-5 text-[#b9cbbc]">The percentage of each sale you'd like to keep. We'll confirm the split during review.</span>
                   </label>
 
                   <label className="grid gap-2">
-                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Audience and fit</span>
-                    <textarea className="input-recessed min-h-32 resize-none p-4 font-mono text-sm uppercase text-[#dce1fb]" placeholder="Tell us about your customers, traffic, and why Cardify fits your platform..." value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} />
+                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Tell us about your audience</span>
+                    <textarea className="input-recessed min-h-32 resize-none p-4 font-mono text-sm uppercase text-[#dce1fb]" placeholder="Monthly traffic, community size, and what you sell today." value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} />
                   </label>
 
                   {message && <p className="border border-[#ffb4ab]/25 bg-[#93000a]/20 p-3 text-sm text-[#ffb4ab]">{message}</p>}
 
                   <button disabled={!user || busy} className="group relative w-full overflow-hidden rounded bg-[#00d1ff] py-4 font-sora text-sm font-bold uppercase tracking-[0.2em] text-[#003543] transition hover:-translate-y-0.5 hover:shadow-[0_0_25px_rgba(0,209,255,0.6)] disabled:cursor-not-allowed disabled:opacity-50">
-                    <span className="relative z-10">{busy ? "Submitting..." : "Initialize application"}</span>
+                    <span className="relative z-10">{busy ? "Submitting..." : "Submit application"}</span>
                     <span className="absolute inset-0 -translate-x-full skew-x-12 bg-white/20 transition-transform duration-700 group-hover:translate-x-full" />
                   </button>
-                  <p className="text-center font-mono text-xs uppercase tracking-wider text-[#b9cbbc]/60">System ready. Awaiting partner input.</p>
+                  <p className="text-center font-mono text-xs uppercase tracking-wider text-[#b9cbbc]/60">We review most applications within 2 business days. You'll hear from us by email.</p>
                 </form>
               )}
             </div>
