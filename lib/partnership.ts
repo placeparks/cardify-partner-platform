@@ -72,9 +72,23 @@ function toBase64Url(input: string | Buffer) {
   return Buffer.from(input).toString("base64url")
 }
 
-function getServiceAccountJson() {
+type TokenResult =
+  | { accessToken: string }
+  | { error: string }
+
+type ServiceAccountJsonResult =
+  | {
+      serviceAccount: {
+        client_email: string
+        private_key: string
+        token_uri?: string
+      }
+    }
+  | { error: string }
+
+function getServiceAccountJson(): ServiceAccountJsonResult {
   const raw = process.env.GMAIL_SERVICE_ACCOUNT_JSON
-  if (!raw) return null
+  if (!raw) return { error: "GMAIL_SERVICE_ACCOUNT_JSON is missing." }
 
   try {
     const normalized = raw.trim()
@@ -87,24 +101,31 @@ function getServiceAccountJson() {
       private_key: string
       token_uri?: string
     }
-    return {
-      ...parsed,
-      private_key: parsed.private_key?.replace(/\\n/g, "\n"),
-    }
-  } catch {
-    return null
+    if (!parsed.client_email) return { error: "GMAIL_SERVICE_ACCOUNT_JSON is missing client_email." }
+    if (!parsed.private_key) return { error: "GMAIL_SERVICE_ACCOUNT_JSON is missing private_key." }
+
+    return { serviceAccount: {
+        ...parsed,
+        private_key: parsed.private_key?.replace(/\\n/g, "\n"),
+      } }
+  } catch (caught) {
+    return { error: `GMAIL_SERVICE_ACCOUNT_JSON is not valid JSON: ${caught instanceof Error ? caught.message : "parse failed"}` }
   }
 }
 
-async function getServiceAccountAccessToken() {
-  const serviceAccount = getServiceAccountJson()
-  if (!serviceAccount?.client_email || !serviceAccount.private_key) return null
+async function getServiceAccountAccessToken(): Promise<TokenResult> {
+  const parsed = getServiceAccountJson()
+  if ("error" in parsed) return { error: parsed.error }
+
+  const serviceAccount = parsed.serviceAccount
 
   const impersonatedEmail = process.env.GMAIL_IMPERSONATED_EMAIL
     || process.env.GMAIL_OAUTH_SUBJECT
     || process.env.GMAIL_SENDER_EMAIL
 
-  if (!impersonatedEmail) return null
+  if (!impersonatedEmail) {
+    return { error: "GMAIL_IMPERSONATED_EMAIL or GMAIL_OAUTH_SUBJECT is missing." }
+  }
 
   const now = Math.floor(Date.now() / 1000)
   const tokenUri = serviceAccount.token_uri || "https://oauth2.googleapis.com/token"
@@ -130,19 +151,26 @@ async function getServiceAccountAccessToken() {
     }),
   })
 
-  if (!response.ok) return null
+  if (!response.ok) {
+    const details = await response.text()
+    return {
+      error: `Google token endpoint returned ${response.status}${details ? `: ${details.slice(0, 400)}` : ""}`,
+    }
+  }
+
   const data = await response.json()
-  return data.access_token as string | undefined
+  if (!data.access_token) return { error: "Google token endpoint did not return access_token." }
+  return { accessToken: data.access_token as string }
 }
 
-async function getGmailAccessToken() {
+async function getGmailAccessToken(): Promise<TokenResult> {
   const serviceAccountToken = await getServiceAccountAccessToken()
-  if (serviceAccountToken) return serviceAccountToken
+  if ("accessToken" in serviceAccountToken) return serviceAccountToken
 
   const clientId = process.env.GMAIL_CLIENT_ID
   const clientSecret = process.env.GMAIL_CLIENT_SECRET
   const refreshToken = process.env.GMAIL_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) return null
+  if (!clientId || !clientSecret || !refreshToken) return { error: serviceAccountToken.error }
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -155,17 +183,24 @@ async function getGmailAccessToken() {
     }),
   })
 
-  if (!response.ok) return null
+  if (!response.ok) {
+    const details = await response.text()
+    return {
+      error: `OAuth refresh token failed after service account failed (${serviceAccountToken.error}). Google returned ${response.status}${details ? `: ${details.slice(0, 400)}` : ""}`,
+    }
+  }
+
   const data = await response.json()
-  return data.access_token as string | undefined
+  if (!data.access_token) return { error: "OAuth refresh token response did not include access_token." }
+  return { accessToken: data.access_token as string }
 }
 
 export async function sendDecisionEmail(request: PartnershipRequest) {
-  const accessToken = await getGmailAccessToken()
-  if (!accessToken) {
+  const token = await getGmailAccessToken()
+  if ("error" in token) {
     return {
       sent: false,
-      reason: "Could not get Gmail access token. Check GMAIL_SERVICE_ACCOUNT_JSON, GMAIL_IMPERSONATED_EMAIL, Gmail API, and domain-wide delegation.",
+      reason: `Could not get Gmail access token. ${token.error}`,
     }
   }
 
@@ -188,7 +223,7 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
   const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token.accessToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ raw: Buffer.from(raw).toString("base64url") }),
