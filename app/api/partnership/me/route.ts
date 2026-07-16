@@ -29,7 +29,9 @@ export async function GET() {
   return NextResponse.json({
     partner: {
       ...partner,
-      widgetCode: partner.widget_partner_key ? makeWidgetSnippet(partner.widget_partner_key) : null,
+      widgetCode: partner.widget_partner_key && partner.stripe_onboarding_complete
+        ? makeWidgetSnippet(partner.widget_partner_key, partner.approved_percentage ?? partner.proposed_percentage)
+        : null,
     },
     metrics,
   })
