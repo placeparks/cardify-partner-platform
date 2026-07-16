@@ -74,10 +74,19 @@ function getServiceAccountJson() {
   if (!raw) return null
 
   try {
-    return JSON.parse(raw.replace(/\\n/g, "\n")) as {
+    const normalized = raw.trim()
+    const unwrapped = (normalized.startsWith("'") && normalized.endsWith("'"))
+      || (normalized.startsWith('"') && normalized.endsWith('"'))
+      ? normalized.slice(1, -1)
+      : normalized
+    const parsed = JSON.parse(unwrapped) as {
       client_email: string
       private_key: string
       token_uri?: string
+    }
+    return {
+      ...parsed,
+      private_key: parsed.private_key?.replace(/\\n/g, "\n"),
     }
   } catch {
     return null
