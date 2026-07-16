@@ -150,7 +150,12 @@ async function getGmailAccessToken() {
 
 export async function sendDecisionEmail(request: PartnershipRequest) {
   const accessToken = await getGmailAccessToken()
-  if (!accessToken) return { sent: false, reason: "Gmail env vars are not configured" }
+  if (!accessToken) {
+    return {
+      sent: false,
+      reason: "Could not get Gmail access token. Check GMAIL_SERVICE_ACCOUNT_JSON, GMAIL_IMPERSONATED_EMAIL, Gmail API, and domain-wide delegation.",
+    }
+  }
 
   const approved = request.status === "approved"
   const senderEmail = process.env.GMAIL_SENDER_EMAIL || "partners@cardify.club"
@@ -178,5 +183,11 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
     body: JSON.stringify({ raw: Buffer.from(raw).toString("base64url") }),
   })
 
-  return response.ok ? { sent: true } : { sent: false, reason: `Gmail returned ${response.status}` }
+  if (response.ok) return { sent: true }
+
+  const details = await response.text()
+  return {
+    sent: false,
+    reason: `Gmail returned ${response.status}${details ? `: ${details.slice(0, 300)}` : ""}`,
+  }
 }
