@@ -38,6 +38,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const email = await sendDecisionEmail(data)
+  const email = await sendDecisionEmail(data).catch((caught) => ({
+    sent: false,
+    reason: caught instanceof Error ? caught.message : "Gmail send crashed before returning a response.",
+  }))
+
   return NextResponse.json({ request: data, email })
 }
