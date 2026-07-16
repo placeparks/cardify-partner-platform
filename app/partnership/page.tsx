@@ -53,9 +53,9 @@ export default function PartnershipPage() {
     <section className="mx-auto grid max-w-6xl gap-8 px-5 py-12 lg:grid-cols-[0.9fr_1.1fr]">
       <div>
         <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Partnership</p>
-        <h1 className="mt-4 text-4xl font-black leading-tight md:text-6xl">Bring premium card printing to your shop.</h1>
+        <h1 className="mt-4 text-4xl font-black leading-tight md:text-6xl">Bring premium card printing to your platform.</h1>
         <p className="mt-5 text-lg leading-8 text-slate-300">
-          Apply with your shop details and suggested revenue percentage. Once approved, your dashboard shows the widget code and live affiliate performance.
+          Apply with your platform details and suggested revenue percentage. Once approved, your dashboard shows the widget code and live affiliate performance.
         </p>
         <div className="mt-8 grid gap-3 text-sm text-slate-300">
           {["Customers stay on your website", "Orders save into our fulfillment database", "Approved partners receive widget code by email"].map((item) => (
@@ -90,7 +90,7 @@ export default function PartnershipPage() {
         )}
 
         <input className="field" required placeholder="Full name" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
-        <input className="field" required placeholder="Business or shop name" value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
+        <input className="field" required placeholder="Business or platform name" value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
         <input className="field" required type="url" placeholder="Website URL" value={form.websiteUrl} onChange={(event) => setForm({ ...form, websiteUrl: event.target.value })} />
         <textarea className="field min-h-28" placeholder="Audience, traffic, or why this is a good fit" value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} />
         <label className="grid gap-2 text-sm text-slate-300">
