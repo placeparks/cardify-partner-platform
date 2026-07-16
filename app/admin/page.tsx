@@ -1,97 +1,139 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Copy, LogIn } from "lucide-react"
+import { Check, CheckCircle2, X, XCircle } from "lucide-react"
 import { signInWithGoogle } from "@/lib/supabase-browser"
 
-export default function DashboardPage() {
-  const [state, setState] = useState<any>({ loading: true })
-  const [copied, setCopied] = useState(false)
-  const widgetCode = state.partner?.widgetCode || ""
+export default function AdminPage() {
+  const [state, setState] = useState<any>({ loading: true, requests: [] })
+  const [savingId, setSavingId] = useState("")
+  const [notice, setNotice] = useState("")
+
+  async function load() {
+    const response = await fetch("/api/admin/partnerships")
+    const data = await response.json()
+    setState({ ...data, loading: false, status: response.status })
+  }
 
   useEffect(() => {
-    fetch("/api/partnership/me").then(async (response) => {
-      const data = await response.json()
-      setState({ ...data, loading: false, status: response.status })
-    })
+    load()
   }, [])
 
-  if (state.loading) return <section className="px-5 py-16 text-center text-slate-300">Loading dashboard...</section>
+  async function decide(id: string, status: "approved" | "declined", approvedPercentage?: number, adminNotes?: string) {
+    setSavingId(id)
+    setNotice("")
+    const response = await fetch(`/api/admin/partnerships/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, approvedPercentage, adminNotes }),
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      setNotice(data.error || "Could not update partnership request.")
+    } else if (data.email?.sent) {
+      setNotice(`${status === "approved" ? "Approved" : "Declined"} and email sent.`)
+    } else {
+      setNotice(`${status === "approved" ? "Approved" : "Declined"}, but email was not sent: ${data.email?.reason || "unknown Gmail error"}`)
+    }
+    setSavingId("")
+    await load()
+  }
+
+  if (state.loading) return <section className="px-5 py-16 text-center text-slate-300">Loading admin...</section>
 
   if (state.status === 401) {
     return (
       <section className="mx-auto max-w-xl px-5 py-16 text-center">
-        <h1 className="text-3xl font-black">Sign in to view your partner dashboard.</h1>
-        <button onClick={() => signInWithGoogle("/dashboard")} className="button-primary mt-6">
-          <LogIn className="h-4 w-4" />
-          Sign in with Google
-        </button>
+        <h1 className="text-3xl font-black">Sign in to review partner requests.</h1>
+        <button onClick={() => signInWithGoogle("/admin")} className="button-primary mt-6">Sign in with Google</button>
       </section>
     )
   }
 
-  if (!state.partner) {
-    return (
-      <section className="mx-auto max-w-xl px-5 py-16 text-center">
-        <h1 className="text-3xl font-black">No partner application yet.</h1>
-        <a href="/partnership" className="button-primary mt-6">Apply now</a>
-      </section>
-    )
-  }
-
-  async function copyWidgetCode() {
-    await navigator.clipboard.writeText(widgetCode)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1800)
+  if (state.status === 403) {
+    return <section className="px-5 py-16 text-center text-red-300">This admin page is limited to authorized emails.</section>
   }
 
   return (
-    <section className="mx-auto max-w-6xl overflow-hidden px-5 py-12">
-      <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Partner dashboard</p>
-      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-black">{state.partner.business_name}</h1>
-          <p className="mt-2 text-slate-300">Status: <span className="font-bold text-green">{state.partner.status}</span></p>
-        </div>
-        <div className="panel px-5 py-4 text-right">
-          <p className="text-xs uppercase tracking-wider text-slate-400">Approved percentage</p>
-          <p className="text-3xl font-black text-green">{state.partner.approved_percentage ?? state.partner.proposed_percentage}%</p>
-        </div>
-      </div>
-
-      {state.partner.status === "approved" ? (
-        <div className="mt-8 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)]">
-          <div className="panel min-w-0 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="font-mono text-sm font-bold uppercase tracking-wider text-cyan">Widget code</h2>
-              <button className="button-secondary px-3 py-2" onClick={copyWidgetCode} title="Copy widget code">
-                <Copy className="h-4 w-4" />
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <pre className="mt-4 max-w-full whitespace-pre-wrap break-all border border-cyan/20 bg-ink p-4 text-xs leading-6 text-green">
-              <code>{widgetCode}</code>
-            </pre>
-          </div>
-
-          <div className="grid min-w-0 gap-4">
-            {[
-              ["Orders", state.metrics.orders],
-              ["Revenue", `$${(state.metrics.revenueCents / 100).toFixed(2)}`],
-              ["Your income", `$${(state.metrics.partnerShareCents / 100).toFixed(2)}`],
-            ].map(([label, value]) => (
-              <div key={label} className="panel p-5">
-                <p className="text-xs uppercase tracking-wider text-slate-400">{label}</p>
-                <p className="mt-2 text-3xl font-black">{value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="panel mt-8 p-6 text-slate-300">
-          Your application is not approved yet. Once approved, this page will show widget code, orders, and income.
+    <section className="mx-auto max-w-6xl px-5 py-12">
+      <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Admin</p>
+      <h1 className="mt-4 text-4xl font-black">Partnership requests</h1>
+      {notice && (
+        <div className="mt-5 border border-cyan/25 bg-ink p-4 text-sm text-slate-200">
+          {notice}
         </div>
       )}
+
+      <div className="mt-8 grid gap-4">
+        {state.requests.map((request: any) => (
+          <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={decide} />
+        ))}
+        {state.requests.length === 0 && <div className="panel p-6 text-slate-300">No partnership requests yet.</div>}
+      </div>
     </section>
+  )
+}
+
+function RequestCard({ request, saving, onDecide }: { request: any; saving: boolean; onDecide: Function }) {
+  const [percentage, setPercentage] = useState(String(request.approved_percentage ?? request.proposed_percentage ?? 2))
+  const [notes, setNotes] = useState(request.admin_notes || "")
+  const isApproved = request.status === "approved"
+  const isDeclined = request.status === "declined"
+
+  return (
+    <article className="panel grid gap-5 p-5 lg:grid-cols-[1fr_280px]">
+      <div>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-2xl font-black">{request.business_name}</h2>
+          <span className="border border-cyan/30 px-2 py-1 font-mono text-xs uppercase text-cyan">{request.status}</span>
+        </div>
+        <p className="mt-2 text-sm text-slate-300">{request.email} - {request.website_url}</p>
+        <p className="mt-4 text-sm leading-6 text-slate-300">{request.audience || "No audience notes provided."}</p>
+        {request.widget_partner_key && (
+          <p className="mt-3 font-mono text-xs text-green">Partner key: {request.widget_partner_key}</p>
+        )}
+      </div>
+
+      {isApproved ? (
+        <div className="grid content-start gap-3 border border-green/30 bg-green/10 p-4">
+          <CheckCircle2 className="h-8 w-8 text-green" />
+          <div>
+            <p className="font-mono text-sm font-bold uppercase tracking-wider text-green">Approved</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300">This partner can access the dashboard and widget code.</p>
+          </div>
+          <div className="border border-green/20 bg-ink/60 p-3">
+            <p className="text-xs uppercase tracking-wider text-slate-400">Approved percentage</p>
+            <p className="mt-1 text-2xl font-black text-green">{request.approved_percentage ?? request.proposed_percentage}%</p>
+          </div>
+        </div>
+      ) : isDeclined ? (
+        <div className="grid content-start gap-3 border border-pink/30 bg-pink/10 p-4">
+          <XCircle className="h-8 w-8 text-pink" />
+          <div>
+            <p className="font-mono text-sm font-bold uppercase tracking-wider text-pink">Declined</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300">This request is closed. The applicant will not see a partner dashboard.</p>
+          </div>
+          {request.admin_notes && (
+            <p className="border border-pink/20 bg-ink/60 p-3 text-sm text-slate-300">{request.admin_notes}</p>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          <label className="text-sm text-slate-300">
+            Approved percentage
+            <input className="field mt-2" type="number" min="0" max="30" step="0.1" value={percentage} onChange={(event) => setPercentage(event.target.value)} />
+          </label>
+          <textarea className="field min-h-20" placeholder="Admin notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+          <button disabled={saving} onClick={() => onDecide(request.id, "approved", Number(percentage), notes)} className="button-primary">
+            <Check className="h-4 w-4" />
+            Approve
+          </button>
+          <button disabled={saving} onClick={() => onDecide(request.id, "declined", Number(percentage), notes)} className="button-secondary border-pink/60 text-pink hover:border-pink hover:text-pink">
+            <X className="h-4 w-4" />
+            Decline
+          </button>
+        </div>
+      )}
+    </article>
   )
 }
