@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: #05070d;
+  color: white;
+}
+
+input,
+textarea,
+select {
+  color-scheme: dark;
+}
+
+.field {
+  @apply w-full border border-cyan/25 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-green;
+}
+
+.panel {
+  @apply border border-cyan/20 bg-white/[0.04] shadow-[0_0_40px_rgba(34,211,238,0.08)];
+}
+
+.button-primary {
+  @apply inline-flex items-center justify-center gap-2 border border-green bg-green px-5 py-3 text-sm font-bold uppercase tracking-wider text-ink transition hover:bg-transparent hover:text-green disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.button-secondary {
+  @apply inline-flex items-center justify-center gap-2 border border-cyan/60 bg-transparent px-5 py-3 text-sm font-bold uppercase tracking-wider text-cyan transition hover:border-green hover:text-green disabled:cursor-not-allowed disabled:opacity-50;
+}
