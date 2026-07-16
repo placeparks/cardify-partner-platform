@@ -29,24 +29,24 @@ export function Navigation() {
   }, [])
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-cyan/20 bg-ink/90 px-5 py-4 backdrop-blur">
+    <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#0f172a]/70 px-5 py-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-        <Link href="/" className="font-mono text-xl font-black tracking-[0.22em] text-green">
-          CARDIFY
+        <Link href="/" className="text-xl font-black tracking-[0.22em] text-[#00ff9d] drop-shadow-[0_0_14px_rgba(0,255,157,0.55)]">
+          Cardify
         </Link>
 
         <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
-          <Link href="/partnership" className="hidden border border-cyan/30 px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
+          <Link href="/partnership" className="hidden border border-cyan/25 bg-white/[0.03] px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
             Partnership
           </Link>
           {canSeeDashboard && (
-            <Link href="/dashboard" className="hidden border border-cyan/30 px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
+            <Link href="/dashboard" className="hidden border border-cyan/25 bg-white/[0.03] px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
               <LayoutDashboard className="h-4 w-4" />
               Dashboard
             </Link>
           )}
           {canSeeAdmin && (
-            <Link href="/admin" className="hidden border border-cyan/30 px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
+            <Link href="/admin" className="hidden border border-cyan/25 bg-white/[0.03] px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
               <ShieldCheck className="h-4 w-4" />
               Admin
             </Link>
