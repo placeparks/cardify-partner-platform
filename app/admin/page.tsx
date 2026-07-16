@@ -48,6 +48,8 @@ export default function AdminPage() {
       declined: requests.filter((request: any) => request.status === "declined").length,
     }
   }, [state.requests])
+  const pendingRequests = useMemo(() => (state.requests || []).filter((request: any) => request.status === "pending"), [state.requests])
+  const reviewedRequests = useMemo(() => (state.requests || []).filter((request: any) => request.status !== "pending"), [state.requests])
 
   if (state.loading) {
     return (
@@ -73,10 +75,11 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-[#020617] px-4 py-12 text-[#dce1fb] md:px-6">
       <section className="mx-auto max-w-[1280px]">
-        <div className="flex flex-col gap-5 border-b border-[#3b4a3f]/30 pb-8 md:flex-row md:items-end md:justify-between">
+        <div className="glass-panel overflow-hidden">
+          <div className="flex flex-col gap-5 border-b border-[#3b4a3f]/30 p-6 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-[#00ff9d]">Admin</p>
-            <h1 className="mt-3 text-4xl font-black text-[#f4fff3] md:text-5xl">Partnership requests</h1>
+            <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-[#00ff9d]">Admin review panel</p>
+            <h1 className="mt-3 text-4xl font-black text-[#f4fff3] md:text-5xl">Partnership control room</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#b9cbbc]">
               Review partner applications, set the final percentage, and approve or decline the request.
             </p>
@@ -85,14 +88,15 @@ export default function AdminPage() {
             <ShieldCheck className="h-4 w-4" />
             Authorized admin
           </div>
-        </div>
+          </div>
 
-        <section className="mt-8 grid gap-4 md:grid-cols-4">
-          <StatCard label="Total requests" value={stats.total} tone="green" icon={Mail} />
-          <StatCard label="Pending review" value={stats.pending} tone="cyan" icon={Clock3} />
-          <StatCard label="Approved" value={stats.approved} tone="green" icon={CheckCircle2} />
-          <StatCard label="Declined" value={stats.declined} tone="pink" icon={XCircle} />
-        </section>
+          <section className="grid gap-4 p-5 md:grid-cols-4">
+            <StatCard label="Total requests" value={stats.total} tone="green" icon={Mail} />
+            <StatCard label="Pending review" value={stats.pending} tone="cyan" icon={Clock3} />
+            <StatCard label="Approved" value={stats.approved} tone="green" icon={CheckCircle2} />
+            <StatCard label="Declined" value={stats.declined} tone="pink" icon={XCircle} />
+          </section>
+        </div>
 
         {notice && (
           <div className="mt-6 border border-[#14d1ff]/25 bg-[#070d1f] p-4 text-sm text-[#dce1fb]">
@@ -100,22 +104,39 @@ export default function AdminPage() {
           </div>
         )}
 
-        <section className="mt-8 overflow-hidden rounded-xl border border-[#3b4a3f]/25 bg-[#0c1324]/70 shadow-[0_20px_80px_rgba(0,0,0,0.3)]">
-          <div className="flex flex-col gap-2 border-b border-[#3b4a3f]/25 px-5 py-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="font-sora text-2xl font-bold text-[#f4fff3]">Applications</h2>
-              <p className="mt-1 text-sm text-[#b9cbbc]">Only data saved from the partnership form appears here.</p>
+        <section className="mt-8 grid gap-6 xl:grid-cols-[1.45fr_0.75fr]">
+          <div className="glass-panel overflow-hidden">
+            <div className="flex flex-col gap-2 border-b border-[#3b4a3f]/25 px-5 py-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="font-sora text-2xl font-bold text-[#f4fff3]">Pending applications</h2>
+                <p className="mt-1 text-sm text-[#b9cbbc]">Only saved partnership requests appear here.</p>
+              </div>
+              <p className="font-mono text-xs uppercase tracking-widest text-[#00d1ff]">{stats.pending} waiting</p>
             </div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[#00d1ff]">{stats.pending} waiting</p>
+
+            <div className="grid gap-4 p-4">
+              {pendingRequests.map((request: any) => (
+                <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={decide} />
+              ))}
+              {pendingRequests.length === 0 && (
+                <div className="glass-card p-8 text-center text-[#b9cbbc]">No pending partnership requests.</div>
+              )}
+            </div>
           </div>
 
-          <div className="grid gap-4 p-4">
-            {state.requests.map((request: any) => (
-              <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={decide} />
-            ))}
-            {state.requests.length === 0 && (
-              <div className="glass-card p-8 text-center text-[#b9cbbc]">No partnership requests yet.</div>
-            )}
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-[#3b4a3f]/25 px-5 py-4">
+              <h2 className="font-sora text-2xl font-bold text-[#f4fff3]">Reviewed requests</h2>
+              <p className="mt-1 text-sm text-[#b9cbbc]">Approved and declined applications from the database.</p>
+            </div>
+            <div className="grid gap-3 p-4">
+              {reviewedRequests.map((request: any) => (
+                <ReviewedRequest key={request.id} request={request} />
+              ))}
+              {reviewedRequests.length === 0 && (
+                <div className="glass-card p-8 text-center text-[#b9cbbc]">No reviewed requests yet.</div>
+              )}
+            </div>
           </div>
         </section>
       </section>
@@ -227,5 +248,22 @@ function DecisionPanel({ icon: Icon, title, tone, children }: { icon: any; title
         <div className="mt-2 text-[#dce1fb]">{children}</div>
       </div>
     </div>
+  )
+}
+
+function ReviewedRequest({ request }: { request: any }) {
+  return (
+    <article className="border border-[#3b4a3f]/25 bg-[#070d1f]/80 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="min-w-0 truncate text-lg font-black text-[#f4fff3]">{request.business_name}</h3>
+        <StatusBadge status={request.status} />
+      </div>
+      <p className="mt-3 break-all text-sm text-[#b9cbbc]">{request.email}</p>
+      <p className="mt-2 break-all text-sm text-[#b9cbbc]">{request.website_url}</p>
+      <div className="mt-4 flex items-center justify-between border-t border-[#3b4a3f]/20 pt-3 text-sm">
+        <span className="text-[#b9cbbc]">Percentage</span>
+        <span className="font-black text-[#00ff9d]">{request.approved_percentage ?? request.proposed_percentage ?? 2}%</span>
+      </div>
+    </article>
   )
 }

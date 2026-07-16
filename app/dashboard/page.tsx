@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Copy, CreditCard, LogIn } from "lucide-react"
+import { CheckCircle2, Code2, Copy, CreditCard, DollarSign, LogIn, PackageCheck, Percent, ShieldCheck } from "lucide-react"
 import { signInWithGoogle } from "@/lib/supabase-browser"
 
 export default function DashboardPage() {
@@ -9,6 +9,7 @@ export default function DashboardPage() {
   const [copied, setCopied] = useState(false)
   const [onboardingBusy, setOnboardingBusy] = useState(false)
   const widgetCode = state.partner?.widgetCode || ""
+  const metrics = state.metrics || { orders: 0, revenueCents: 0, partnerShareCents: 0 }
 
   useEffect(() => {
     async function loadDashboard() {
@@ -73,69 +74,152 @@ export default function DashboardPage() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-5xl overflow-hidden px-5 py-10">
-      <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Partner dashboard</p>
-      <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-        <div className="min-w-0">
-          <h1 className="text-4xl font-black">{state.partner.business_name}</h1>
-          <p className="mt-2 text-slate-300">Status: <span className="font-bold text-green">{state.partner.status}</span></p>
-        </div>
-        <div className="panel px-5 py-4 text-left sm:text-right">
-          <p className="text-xs uppercase tracking-wider text-slate-400">Approved percentage</p>
-          <p className="text-3xl font-black text-green">{state.partner.approved_percentage ?? state.partner.proposed_percentage}%</p>
-        </div>
-      </div>
-
-      {state.partner.status === "approved" && !widgetCode ? (
-        <div className="panel mt-8 grid gap-5 p-6 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <h2 className="text-2xl font-black">Complete payout onboarding</h2>
-            <p className="mt-2 max-w-2xl leading-7 text-slate-300">
-              Your partnership is approved. Connect your Stripe account before installing the widget so partner income can be routed correctly.
-            </p>
-            {state.error && <p className="mt-3 text-sm text-red-300">{state.error}</p>}
+    <main className="min-h-screen bg-[#020617] px-4 py-10 text-[#dce1fb] md:px-6">
+      <section className="mx-auto grid max-w-[1280px] gap-6 lg:grid-cols-[260px_1fr]">
+        <aside className="glass-panel hidden min-h-[560px] p-5 lg:block">
+          <div className="font-mono text-2xl font-black tracking-[0.18em] text-[#00ff9d]">CARDIFY</div>
+          <div className="mt-10 border-l-2 border-[#00ff9d] pl-4">
+            <p className="font-mono text-xs uppercase tracking-[0.25em] text-[#00d1ff]">Partner portal</p>
+            <p className="mt-2 text-sm text-[#b9cbbc]">{state.partner.business_name}</p>
           </div>
-          <button className="button-primary justify-center" onClick={startOnboarding} disabled={onboardingBusy}>
-            <CreditCard className="h-4 w-4" />
-            {onboardingBusy ? "Opening Stripe..." : "Connect Stripe"}
-          </button>
-        </div>
-      ) : state.partner.status === "approved" ? (
-        <div className="mt-8 grid min-w-0 gap-5">
-          <div className="panel min-w-0 overflow-hidden p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="font-mono text-sm font-bold uppercase tracking-wider text-cyan">Widget code</h2>
-              <button className="button-secondary shrink-0 px-3 py-2" onClick={copyWidgetCode} title="Copy widget code">
-                <Copy className="h-4 w-4" />
-                {copied ? "Copied" : "Copy"}
+          <div className="mt-8 space-y-3 text-sm text-[#b9cbbc]">
+            <div className="flex items-center gap-3 border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-3 py-3 text-[#56ffa8]">
+              <ShieldCheck className="h-4 w-4" />
+              Dashboard
+            </div>
+            <div className="flex items-center gap-3 border border-[#3b4a3f]/25 px-3 py-3">
+              <Code2 className="h-4 w-4 text-[#00d1ff]" />
+              Widget code
+            </div>
+            <div className="flex items-center gap-3 border border-[#3b4a3f]/25 px-3 py-3">
+              <DollarSign className="h-4 w-4 text-[#00d1ff]" />
+              Revenue summary
+            </div>
+          </div>
+        </aside>
+
+        <div className="min-w-0">
+          <div className="glass-panel overflow-hidden">
+            <div className="flex flex-col gap-5 border-b border-[#3b4a3f]/25 p-5 md:flex-row md:items-end md:justify-between">
+              <div className="min-w-0">
+                <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-[#00ff9d]">Partner dashboard</p>
+                <h1 className="mt-3 truncate text-4xl font-black text-[#f4fff3] md:text-5xl">{state.partner.business_name}</h1>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-[#b9cbbc]">
+                  <span>Status: <span className="font-bold text-[#00ff9d]">{state.partner.status}</span></span>
+                  {state.partner.status === "approved" && (
+                    <span className="inline-flex items-center gap-2 border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-[#56ffa8]">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Approved
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="border border-[#00d1ff]/25 bg-[#020617]/80 px-5 py-4 text-left md:text-right">
+                <p className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Approved percentage</p>
+                <p className="mt-1 text-4xl font-black text-[#00ff9d]">{state.partner.approved_percentage ?? state.partner.proposed_percentage}%</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 p-5 md:grid-cols-4">
+              <MetricCard icon={PackageCheck} label="Orders" value={metrics.orders} />
+              <MetricCard icon={DollarSign} label="Revenue" value={formatMoney(metrics.revenueCents)} />
+              <MetricCard icon={DollarSign} label="Your income" value={formatMoney(metrics.partnerShareCents)} />
+              <MetricCard icon={Percent} label="Share" value={`${state.partner.approved_percentage ?? state.partner.proposed_percentage}%`} />
+            </div>
+          </div>
+
+          {state.partner.status === "approved" && !widgetCode ? (
+            <div className="glass-panel mt-6 grid gap-5 p-6 md:grid-cols-[1fr_auto] md:items-center">
+              <div>
+                <p className="font-mono text-sm font-bold uppercase tracking-[0.22em] text-[#00d1ff]">Payout onboarding</p>
+                <h2 className="mt-2 text-3xl font-black text-[#f4fff3]">Connect Stripe to unlock your widget.</h2>
+                <p className="mt-3 max-w-2xl leading-7 text-[#b9cbbc]">
+                  Your partnership is approved. Connect your Stripe account so partner income can be routed correctly before the widget is installed.
+                </p>
+                {state.error && <p className="mt-3 border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-200">{state.error}</p>}
+              </div>
+              <button className="button-primary justify-center" onClick={startOnboarding} disabled={onboardingBusy}>
+                <CreditCard className="h-4 w-4" />
+                {onboardingBusy ? "Opening Stripe..." : "Connect Stripe"}
               </button>
             </div>
-            <textarea
-              className="mt-4 block h-32 w-full resize-none overflow-auto border border-cyan/20 bg-ink p-4 font-mono text-xs leading-6 text-green outline-none"
-              readOnly
-              value={widgetCode}
-              aria-label="Widget code"
-            />
-          </div>
-
-          <div className="grid min-w-0 gap-4 sm:grid-cols-3">
-            {[
-              ["Orders", state.metrics.orders],
-              ["Revenue", `$${(state.metrics.revenueCents / 100).toFixed(2)}`],
-              ["Your income", `$${(state.metrics.partnerShareCents / 100).toFixed(2)}`],
-            ].map(([label, value]) => (
-              <div key={label} className="panel p-5">
-                <p className="text-xs uppercase tracking-wider text-slate-400">{label}</p>
-                <p className="mt-2 text-3xl font-black">{value}</p>
+          ) : state.partner.status === "approved" ? (
+            <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[1.45fr_0.75fr]">
+              <div className="glass-panel min-w-0 overflow-hidden p-5">
+                <div className="flex flex-col gap-3 border-b border-[#3b4a3f]/25 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Widget code</p>
+                    <p className="mt-1 text-sm text-[#b9cbbc]">Install this script on the approved partner website.</p>
+                  </div>
+                  <button className="button-secondary shrink-0 px-4 py-3" onClick={copyWidgetCode} title="Copy widget code">
+                    <Copy className="h-4 w-4" />
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                <textarea
+                  className="mt-5 block h-44 w-full resize-none overflow-auto border border-[#00d1ff]/20 bg-[#020617] p-5 font-mono text-xs leading-7 text-[#00ff9d] outline-none"
+                  readOnly
+                  value={widgetCode}
+                  aria-label="Widget code"
+                />
               </div>
-            ))}
-          </div>
+
+              <div className="grid gap-6">
+                <div className="glass-panel p-5">
+                  <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Payout status</p>
+                  <div className="mt-4 flex items-start gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center border border-[#00ff9d]/25 bg-[#00ff9d]/10 text-[#56ffa8]">
+                      <CheckCircle2 className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-bold text-[#f4fff3]">Stripe connected</p>
+                      <p className="mt-1 text-sm leading-6 text-[#b9cbbc]">Partner income is tracked from completed widget orders.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="glass-panel p-5">
+                  <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Order summary</p>
+                  <div className="mt-4 space-y-3 text-sm">
+                    <SummaryRow label="Orders placed" value={metrics.orders} />
+                    <SummaryRow label="Total revenue" value={formatMoney(metrics.revenueCents)} />
+                    <SummaryRow label="Partner income" value={formatMoney(metrics.partnerShareCents)} highlight />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="glass-panel mt-6 p-6 text-[#b9cbbc]">
+              Your application is not approved yet. Once approved, this page will show widget code, orders, and income.
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="panel mt-8 p-6 text-slate-300">
-          Your application is not approved yet. Once approved, this page will show widget code, orders, and income.
-        </div>
-      )}
-    </section>
+      </section>
+    </main>
+  )
+}
+
+function formatMoney(cents = 0) {
+  return `$${(cents / 100).toFixed(2)}`
+}
+
+function MetricCard({ icon: Icon, label, value }: { icon: any; label: string; value: string | number }) {
+  return (
+    <div className="glass-card min-w-0 border border-[#3b4a3f]/25 p-4">
+      <div className="mb-4 flex h-9 w-9 items-center justify-center border border-[#00d1ff]/20 bg-[#00d1ff]/10 text-[#00d1ff]">
+        <Icon className="h-5 w-5" />
+      </div>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-[#b9cbbc]">{label}</p>
+      <p className="mt-2 truncate text-2xl font-black text-[#f4fff3]">{value}</p>
+    </div>
+  )
+}
+
+function SummaryRow({ label, value, highlight = false }: { label: string; value: string | number; highlight?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-[#3b4a3f]/20 pb-3 last:border-b-0 last:pb-0">
+      <span className="text-[#b9cbbc]">{label}</span>
+      <span className={highlight ? "font-black text-[#00ff9d]" : "font-bold text-[#f4fff3]"}>{value}</span>
+    </div>
   )
 }
