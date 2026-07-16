@@ -1,16 +1,19 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Copy, LogIn } from "lucide-react"
+import { Copy, CreditCard, LogIn } from "lucide-react"
 import { signInWithGoogle } from "@/lib/supabase-browser"
 
 export default function DashboardPage() {
   const [state, setState] = useState<any>({ loading: true })
   const [copied, setCopied] = useState(false)
+  const [onboardingBusy, setOnboardingBusy] = useState(false)
   const widgetCode = state.partner?.widgetCode || ""
 
   useEffect(() => {
-    fetch("/api/partnership/me").then(async (response) => {
+    async function loadDashboard() {
+      await fetch("/api/stripe/connect/status", { cache: "no-store" }).catch(() => null)
+      const response = await fetch("/api/partnership/me")
       const data = await response.json()
       setState({ ...data, loading: false, status: response.status })
 
@@ -19,7 +22,9 @@ export default function DashboardPage() {
         const navData = await navResponse.json()
         if (navData.isAdmin) window.location.replace("/admin")
       }
-    })
+    }
+
+    loadDashboard()
   }, [])
 
   if (state.loading) return <section className="px-5 py-16 text-center text-slate-300">Loading dashboard...</section>
@@ -51,6 +56,22 @@ export default function DashboardPage() {
     window.setTimeout(() => setCopied(false), 1800)
   }
 
+  async function startOnboarding() {
+    setOnboardingBusy(true)
+    try {
+      const response = await fetch("/api/stripe/connect/onboard", { method: "POST" })
+      const data = await response.json()
+      if (!response.ok || !data.url) throw new Error(data.error || "Could not start Stripe onboarding")
+      window.location.href = data.url
+    } catch (caught) {
+      setState((current: any) => ({
+        ...current,
+        error: caught instanceof Error ? caught.message : "Could not start Stripe onboarding",
+      }))
+      setOnboardingBusy(false)
+    }
+  }
+
   return (
     <section className="mx-auto w-full max-w-5xl overflow-hidden px-5 py-10">
       <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Partner dashboard</p>
@@ -65,7 +86,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {state.partner.status === "approved" ? (
+      {state.partner.status === "approved" && !widgetCode ? (
+        <div className="panel mt-8 grid gap-5 p-6 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <h2 className="text-2xl font-black">Complete payout onboarding</h2>
+            <p className="mt-2 max-w-2xl leading-7 text-slate-300">
+              Your partnership is approved. Connect your Stripe account before installing the widget so partner income can be routed correctly.
+            </p>
+            {state.error && <p className="mt-3 text-sm text-red-300">{state.error}</p>}
+          </div>
+          <button className="button-primary justify-center" onClick={startOnboarding} disabled={onboardingBusy}>
+            <CreditCard className="h-4 w-4" />
+            {onboardingBusy ? "Opening Stripe..." : "Connect Stripe"}
+          </button>
+        </div>
+      ) : state.partner.status === "approved" ? (
         <div className="mt-8 grid min-w-0 gap-5">
           <div className="panel min-w-0 overflow-hidden p-5">
             <div className="flex items-center justify-between gap-3">
