@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Check, X } from "lucide-react"
+import { Check, CheckCircle2, X, XCircle } from "lucide-react"
 import { signInWithGoogle } from "@/lib/supabase-browser"
 
 export default function AdminPage() {
@@ -62,6 +62,8 @@ export default function AdminPage() {
 function RequestCard({ request, saving, onDecide }: { request: any; saving: boolean; onDecide: Function }) {
   const [percentage, setPercentage] = useState(String(request.approved_percentage ?? request.proposed_percentage ?? 2))
   const [notes, setNotes] = useState(request.admin_notes || "")
+  const isApproved = request.status === "approved"
+  const isDeclined = request.status === "declined"
 
   return (
     <article className="panel grid gap-5 p-5 lg:grid-cols-[1fr_280px]">
@@ -70,28 +72,53 @@ function RequestCard({ request, saving, onDecide }: { request: any; saving: bool
           <h2 className="text-2xl font-black">{request.business_name}</h2>
           <span className="border border-cyan/30 px-2 py-1 font-mono text-xs uppercase text-cyan">{request.status}</span>
         </div>
-        <p className="mt-2 text-sm text-slate-300">{request.email} · {request.website_url}</p>
+        <p className="mt-2 text-sm text-slate-300">{request.email} - {request.website_url}</p>
         <p className="mt-4 text-sm leading-6 text-slate-300">{request.audience || "No audience notes provided."}</p>
         {request.widget_partner_key && (
           <p className="mt-3 font-mono text-xs text-green">Partner key: {request.widget_partner_key}</p>
         )}
       </div>
 
-      <div className="grid gap-3">
-        <label className="text-sm text-slate-300">
-          Approved percentage
-          <input className="field mt-2" type="number" min="0" max="30" step="0.1" value={percentage} onChange={(event) => setPercentage(event.target.value)} />
-        </label>
-        <textarea className="field min-h-20" placeholder="Admin notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
-        <button disabled={saving} onClick={() => onDecide(request.id, "approved", Number(percentage), notes)} className="button-primary">
-          <Check className="h-4 w-4" />
-          Approve
-        </button>
-        <button disabled={saving} onClick={() => onDecide(request.id, "declined", Number(percentage), notes)} className="button-secondary border-pink/60 text-pink hover:border-pink hover:text-pink">
-          <X className="h-4 w-4" />
-          Decline
-        </button>
-      </div>
+      {isApproved ? (
+        <div className="grid content-start gap-3 border border-green/30 bg-green/10 p-4">
+          <CheckCircle2 className="h-8 w-8 text-green" />
+          <div>
+            <p className="font-mono text-sm font-bold uppercase tracking-wider text-green">Approved</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300">This partner can access the dashboard and widget code.</p>
+          </div>
+          <div className="border border-green/20 bg-ink/60 p-3">
+            <p className="text-xs uppercase tracking-wider text-slate-400">Approved percentage</p>
+            <p className="mt-1 text-2xl font-black text-green">{request.approved_percentage ?? request.proposed_percentage}%</p>
+          </div>
+        </div>
+      ) : isDeclined ? (
+        <div className="grid content-start gap-3 border border-pink/30 bg-pink/10 p-4">
+          <XCircle className="h-8 w-8 text-pink" />
+          <div>
+            <p className="font-mono text-sm font-bold uppercase tracking-wider text-pink">Declined</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300">This request is closed. The applicant will not see a partner dashboard.</p>
+          </div>
+          {request.admin_notes && (
+            <p className="border border-pink/20 bg-ink/60 p-3 text-sm text-slate-300">{request.admin_notes}</p>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          <label className="text-sm text-slate-300">
+            Approved percentage
+            <input className="field mt-2" type="number" min="0" max="30" step="0.1" value={percentage} onChange={(event) => setPercentage(event.target.value)} />
+          </label>
+          <textarea className="field min-h-20" placeholder="Admin notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+          <button disabled={saving} onClick={() => onDecide(request.id, "approved", Number(percentage), notes)} className="button-primary">
+            <Check className="h-4 w-4" />
+            Approve
+          </button>
+          <button disabled={saving} onClick={() => onDecide(request.id, "declined", Number(percentage), notes)} className="button-secondary border-pink/60 text-pink hover:border-pink hover:text-pink">
+            <X className="h-4 w-4" />
+            Decline
+          </button>
+        </div>
+      )}
     </article>
   )
 }
