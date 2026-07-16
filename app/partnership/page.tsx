@@ -140,17 +140,17 @@ export default function PartnershipPage() {
                   <div className="grid gap-6 md:grid-cols-2">
                     <label className="grid gap-2">
                       <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Full name</span>
-                      <input className="input-recessed p-4 font-mono text-sm uppercase text-[#dce1fb]" required placeholder="ALEX MERCER" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
+                      <input className="input-recessed p-4 font-mono text-sm text-[#dce1fb]" required placeholder="Alex Mercer" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
                     </label>
                     <label className="grid gap-2">
                       <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Email</span>
-                      <input className="input-recessed p-4 font-mono text-sm uppercase text-[#dce1fb]" readOnly value={user?.email || "SIGN IN REQUIRED"} />
+                      <input className="input-recessed p-4 font-mono text-sm text-[#dce1fb]" readOnly value={user?.email || "Sign in required"} />
                     </label>
                   </div>
 
                   <label className="grid gap-2">
                     <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Business or store name</span>
-                    <input className="input-recessed p-4 font-mono text-sm uppercase text-[#dce1fb]" required placeholder="YOUR SHOP OR STORE" value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
+                    <input className="input-recessed p-4 font-mono text-sm text-[#dce1fb]" required placeholder="Your shop or store" value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
                   </label>
 
                   <label className="grid gap-2">
@@ -169,7 +169,7 @@ export default function PartnershipPage() {
 
                   <label className="grid gap-2">
                     <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Tell us about your audience</span>
-                    <textarea className="input-recessed min-h-32 resize-none p-4 font-mono text-sm uppercase text-[#dce1fb]" placeholder="Monthly traffic, community size, and what you sell today." value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} />
+                    <textarea className="input-recessed min-h-32 resize-none p-4 font-mono text-sm text-[#dce1fb]" placeholder="Monthly traffic, community size, and what you sell today." value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} />
                   </label>
 
                   {message && <p className="border border-[#ffb4ab]/25 bg-[#93000a]/20 p-3 text-sm text-[#ffb4ab]">{message}</p>}
