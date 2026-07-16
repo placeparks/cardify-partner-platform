@@ -20,6 +20,7 @@ export type PartnershipRequest = {
   widget_partner_key: string | null
   stripe_account_id: string | null
   stripe_onboarding_complete: boolean | null
+  widget_email_sent_at: string | null
   created_at: string
   reviewed_at: string | null
 }
@@ -195,7 +196,7 @@ async function getGmailAccessToken(): Promise<TokenResult> {
   return { accessToken: data.access_token as string }
 }
 
-export async function sendDecisionEmail(request: PartnershipRequest) {
+async function sendGmailMessage(input: { to: string; subject: string; text: string }) {
   const token = await getGmailAccessToken()
   if ("error" in token) {
     return {
@@ -204,20 +205,14 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
     }
   }
 
-  const approved = request.status === "approved"
   const senderEmail = process.env.GMAIL_SENDER_EMAIL || "partners@cardify.club"
-  const subject = approved ? "Your Cardify partnership is approved" : "Cardify partnership update"
-  const text = approved
-    ? `Hi ${request.full_name || request.business_name},\n\nYour Cardify partnership is approved at ${request.approved_percentage ?? request.proposed_percentage}%.\n\nNext step: sign in to your Cardify dashboard and complete Stripe Connect onboarding. Once Stripe confirms the connected account, your dashboard will show the widget code for your shop.\n\nCardify`
-    : `Hi ${request.full_name || request.business_name},\n\nThanks for applying to become a Cardify partner. We are not able to approve this application right now.\n\n${request.admin_notes ? `Notes: ${request.admin_notes}\n\n` : ""}Cardify`
-
   const raw = [
     `From: "Cardify Partnerships" <${senderEmail}>`,
-    `To: ${request.email}`,
-    `Subject: ${subject}`,
+    `To: ${input.to}`,
+    `Subject: ${input.subject}`,
     "Content-Type: text/plain; charset=UTF-8",
     "",
-    text,
+    input.text,
   ].join("\r\n")
 
   const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
@@ -236,4 +231,27 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
     sent: false,
     reason: `Gmail returned ${response.status}${details ? `: ${details.slice(0, 300)}` : ""}`,
   }
+}
+
+export async function sendDecisionEmail(request: PartnershipRequest) {
+  const approved = request.status === "approved"
+  const subject = approved ? "Your Cardify partnership is approved" : "Cardify partnership update"
+  const text = approved
+    ? `Hi ${request.full_name || request.business_name},\n\nYour Cardify partnership is approved at ${request.approved_percentage ?? request.proposed_percentage}%.\n\nNext step: sign in to your Cardify dashboard and complete Stripe Connect onboarding. Once Stripe confirms the connected account, your dashboard will show the widget code for your shop.\n\nCardify`
+    : `Hi ${request.full_name || request.business_name},\n\nThanks for applying to become a Cardify partner. We are not able to approve this application right now.\n\n${request.admin_notes ? `Notes: ${request.admin_notes}\n\n` : ""}Cardify`
+
+  return sendGmailMessage({ to: request.email, subject, text })
+}
+
+export async function sendWidgetReadyEmail(request: PartnershipRequest) {
+  if (!request.widget_partner_key) {
+    return { sent: false, reason: "Partner does not have a widget partner key yet." }
+  }
+
+  const widgetCode = makeWidgetSnippet(request.widget_partner_key, request.approved_percentage ?? request.proposed_percentage)
+  const dashboardUrl = (process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL || "https://cardify-partner-platform.vercel.app").replace(/\/$/, "")
+  const subject = "Your Cardify widget is ready"
+  const text = `Hi ${request.full_name || request.business_name},\n\nYour Stripe Connect onboarding is complete and your Cardify widget is ready.\n\nAdd this code to your shop:\n\n${widgetCode}\n\nYou can also sign in to your dashboard to copy the latest code and track orders:\n${dashboardUrl}/dashboard\n\nCardify`
+
+  return sendGmailMessage({ to: request.email, subject, text })
 }
