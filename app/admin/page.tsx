@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Check, CheckCircle2, X, XCircle } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { Check, CheckCircle2, Clock3, Mail, Percent, ShieldCheck, X, XCircle } from "lucide-react"
 import { signInWithGoogle } from "@/lib/supabase-browser"
 
 export default function AdminPage() {
@@ -10,7 +10,7 @@ export default function AdminPage() {
   const [notice, setNotice] = useState("")
 
   async function load() {
-    const response = await fetch("/api/admin/partnerships")
+    const response = await fetch("/api/admin/partnerships", { cache: "no-store" })
     const data = await response.json()
     setState({ ...data, loading: false, status: response.status })
   }
@@ -39,7 +39,23 @@ export default function AdminPage() {
     await load()
   }
 
-  if (state.loading) return <section className="px-5 py-16 text-center text-slate-300">Loading admin...</section>
+  const stats = useMemo(() => {
+    const requests = state.requests || []
+    return {
+      total: requests.length,
+      pending: requests.filter((request: any) => request.status === "pending").length,
+      approved: requests.filter((request: any) => request.status === "approved").length,
+      declined: requests.filter((request: any) => request.status === "declined").length,
+    }
+  }, [state.requests])
+
+  if (state.loading) {
+    return (
+      <section className="min-h-screen bg-[#020617] px-5 py-16 text-center text-[#b9cbbc]">
+        Loading admin...
+      </section>
+    )
+  }
 
   if (state.status === 401) {
     return (
@@ -55,22 +71,75 @@ export default function AdminPage() {
   }
 
   return (
-    <section className="mx-auto max-w-6xl px-5 py-12">
-      <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Admin</p>
-      <h1 className="mt-4 text-4xl font-black">Partnership requests</h1>
-      {notice && (
-        <div className="mt-5 border border-cyan/25 bg-ink p-4 text-sm text-slate-200">
-          {notice}
+    <main className="min-h-screen bg-[#020617] px-4 py-12 text-[#dce1fb] md:px-6">
+      <section className="mx-auto max-w-[1280px]">
+        <div className="flex flex-col gap-5 border-b border-[#3b4a3f]/30 pb-8 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-[#00ff9d]">Admin</p>
+            <h1 className="mt-3 text-4xl font-black text-[#f4fff3] md:text-5xl">Partnership requests</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#b9cbbc]">
+              Review partner applications, set the final percentage, and approve or decline the request.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#56ffa8]">
+            <ShieldCheck className="h-4 w-4" />
+            Authorized admin
+          </div>
         </div>
-      )}
 
-      <div className="mt-8 grid gap-4">
-        {state.requests.map((request: any) => (
-          <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={decide} />
-        ))}
-        {state.requests.length === 0 && <div className="panel p-6 text-slate-300">No partnership requests yet.</div>}
+        <section className="mt-8 grid gap-4 md:grid-cols-4">
+          <StatCard label="Total requests" value={stats.total} tone="green" icon={Mail} />
+          <StatCard label="Pending review" value={stats.pending} tone="cyan" icon={Clock3} />
+          <StatCard label="Approved" value={stats.approved} tone="green" icon={CheckCircle2} />
+          <StatCard label="Declined" value={stats.declined} tone="pink" icon={XCircle} />
+        </section>
+
+        {notice && (
+          <div className="mt-6 border border-[#14d1ff]/25 bg-[#070d1f] p-4 text-sm text-[#dce1fb]">
+            {notice}
+          </div>
+        )}
+
+        <section className="mt-8 overflow-hidden rounded-xl border border-[#3b4a3f]/25 bg-[#0c1324]/70 shadow-[0_20px_80px_rgba(0,0,0,0.3)]">
+          <div className="flex flex-col gap-2 border-b border-[#3b4a3f]/25 px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="font-sora text-2xl font-bold text-[#f4fff3]">Applications</h2>
+              <p className="mt-1 text-sm text-[#b9cbbc]">Only data saved from the partnership form appears here.</p>
+            </div>
+            <p className="font-mono text-xs uppercase tracking-widest text-[#00d1ff]">{stats.pending} waiting</p>
+          </div>
+
+          <div className="grid gap-4 p-4">
+            {state.requests.map((request: any) => (
+              <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={decide} />
+            ))}
+            {state.requests.length === 0 && (
+              <div className="glass-card p-8 text-center text-[#b9cbbc]">No partnership requests yet.</div>
+            )}
+          </div>
+        </section>
+      </section>
+    </main>
+  )
+}
+
+function StatCard({ label, value, tone, icon: Icon }: { label: string; value: number; tone: "green" | "cyan" | "pink"; icon: any }) {
+  const toneClasses = {
+    green: "text-[#00ff9d] bg-[#00ff9d]/10 border-[#00ff9d]/20",
+    cyan: "text-[#14d1ff] bg-[#14d1ff]/10 border-[#14d1ff]/20",
+    pink: "text-[#ffb0cd] bg-[#ffb0cd]/10 border-[#ffb0cd]/20",
+  }[tone]
+
+  return (
+    <div className="glass-card rounded-xl p-5">
+      <div className="mb-4 flex items-start justify-between">
+        <span className={`flex h-10 w-10 items-center justify-center rounded border ${toneClasses}`}>
+          <Icon className="h-5 w-5" />
+        </span>
       </div>
-    </section>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-[#b9cbbc]">{label}</p>
+      <p className="mt-1 text-3xl font-black text-[#f4fff3]">{value}</p>
+    </div>
   )
 }
 
@@ -81,47 +150,44 @@ function RequestCard({ request, saving, onDecide }: { request: any; saving: bool
   const isDeclined = request.status === "declined"
 
   return (
-    <article className="panel grid gap-5 p-5 lg:grid-cols-[1fr_280px]">
+    <article className="grid gap-5 rounded-lg border border-[#3b4a3f]/25 bg-[#070d1f]/80 p-5 transition hover:border-[#00ff9d]/35 lg:grid-cols-[1fr_300px]">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-2xl font-black">{request.business_name}</h2>
-          <span className="border border-cyan/30 px-2 py-1 font-mono text-xs uppercase text-cyan">{request.status}</span>
+          <h3 className="text-2xl font-black text-[#f4fff3]">{request.business_name}</h3>
+          <StatusBadge status={request.status} />
         </div>
-        <p className="mt-2 text-sm text-slate-300">{request.email} - {request.website_url}</p>
-        <p className="mt-4 text-sm leading-6 text-slate-300">{request.audience || "No audience notes provided."}</p>
-        {request.widget_partner_key && (
-          <p className="mt-3 font-mono text-xs text-green">Partner key: {request.widget_partner_key}</p>
-        )}
+        <div className="mt-3 grid gap-2 text-sm text-[#b9cbbc] md:grid-cols-2">
+          <p className="break-all">{request.email}</p>
+          <p className="break-all">{request.website_url}</p>
+        </div>
+        <p className="mt-4 text-sm leading-6 text-[#dce1fb]">{request.audience || "No audience notes provided."}</p>
+        <div className="mt-4 flex flex-wrap gap-3 font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">
+          <span className="border border-[#3b4a3f]/30 bg-[#0c1324] px-3 py-2">Requested {request.proposed_percentage ?? 2}%</span>
+          {request.widget_partner_key && <span className="border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-3 py-2 text-[#56ffa8]">Partner key saved</span>}
+        </div>
       </div>
 
       {isApproved ? (
-        <div className="grid content-start gap-3 border border-green/30 bg-green/10 p-4">
-          <CheckCircle2 className="h-8 w-8 text-green" />
-          <div>
-            <p className="font-mono text-sm font-bold uppercase tracking-wider text-green">Approved</p>
-            <p className="mt-2 text-sm leading-6 text-slate-300">This partner can access the dashboard and widget code.</p>
+        <DecisionPanel icon={CheckCircle2} title="Approved" tone="green">
+          <p>This partner can access the dashboard and widget code.</p>
+          <div className="mt-4 border border-[#00ff9d]/20 bg-[#020617]/70 p-3">
+            <p className="text-xs uppercase tracking-wider text-[#b9cbbc]">Approved percentage</p>
+            <p className="mt-1 text-2xl font-black text-[#00ff9d]">{request.approved_percentage ?? request.proposed_percentage}%</p>
           </div>
-          <div className="border border-green/20 bg-ink/60 p-3">
-            <p className="text-xs uppercase tracking-wider text-slate-400">Approved percentage</p>
-            <p className="mt-1 text-2xl font-black text-green">{request.approved_percentage ?? request.proposed_percentage}%</p>
-          </div>
-        </div>
+        </DecisionPanel>
       ) : isDeclined ? (
-        <div className="grid content-start gap-3 border border-pink/30 bg-pink/10 p-4">
-          <XCircle className="h-8 w-8 text-pink" />
-          <div>
-            <p className="font-mono text-sm font-bold uppercase tracking-wider text-pink">Declined</p>
-            <p className="mt-2 text-sm leading-6 text-slate-300">This request is closed. The applicant will not see a partner dashboard.</p>
-          </div>
-          {request.admin_notes && (
-            <p className="border border-pink/20 bg-ink/60 p-3 text-sm text-slate-300">{request.admin_notes}</p>
-          )}
-        </div>
+        <DecisionPanel icon={XCircle} title="Declined" tone="pink">
+          <p>This request is closed. The applicant will not see a partner dashboard.</p>
+          {request.admin_notes && <p className="mt-4 border border-[#ffb0cd]/20 bg-[#020617]/70 p-3">{request.admin_notes}</p>}
+        </DecisionPanel>
       ) : (
-        <div className="grid gap-3">
-          <label className="text-sm text-slate-300">
+        <div className="grid content-start gap-3">
+          <label className="text-sm text-[#b9cbbc]">
             Approved percentage
-            <input className="field mt-2" type="number" min="0" max="30" step="0.1" value={percentage} onChange={(event) => setPercentage(event.target.value)} />
+            <div className="mt-2 flex items-center gap-2">
+              <input className="field" type="number" min="0" max="30" step="0.1" value={percentage} onChange={(event) => setPercentage(event.target.value)} />
+              <Percent className="h-4 w-4 text-[#14d1ff]" />
+            </div>
           </label>
           <textarea className="field min-h-20" placeholder="Admin notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
           <button disabled={saving} onClick={() => onDecide(request.id, "approved", Number(percentage), notes)} className="button-primary">
@@ -135,5 +201,31 @@ function RequestCard({ request, saving, onDecide }: { request: any; saving: bool
         </div>
       )}
     </article>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const classes = status === "approved"
+    ? "border-[#00ff9d]/25 bg-[#00ff9d]/10 text-[#56ffa8]"
+    : status === "declined"
+      ? "border-[#ffb0cd]/25 bg-[#ffb0cd]/10 text-[#ffb0cd]"
+      : "border-[#14d1ff]/25 bg-[#14d1ff]/10 text-[#14d1ff]"
+
+  return <span className={`border px-2 py-1 font-mono text-xs uppercase ${classes}`}>{status}</span>
+}
+
+function DecisionPanel({ icon: Icon, title, tone, children }: { icon: any; title: string; tone: "green" | "pink"; children: React.ReactNode }) {
+  const classes = tone === "green"
+    ? "border-[#00ff9d]/30 bg-[#00ff9d]/10 text-[#56ffa8]"
+    : "border-[#ffb0cd]/30 bg-[#ffb0cd]/10 text-[#ffb0cd]"
+
+  return (
+    <div className={`grid content-start gap-3 border p-4 text-sm leading-6 ${classes}`}>
+      <Icon className="h-8 w-8" />
+      <div>
+        <p className="font-mono text-sm font-bold uppercase tracking-wider">{title}</p>
+        <div className="mt-2 text-[#dce1fb]">{children}</div>
+      </div>
+    </div>
   )
 }
