@@ -8,6 +8,7 @@ export default function DashboardPage() {
   const [state, setState] = useState<any>({ loading: true })
   const [copied, setCopied] = useState(false)
   const [onboardingBusy, setOnboardingBusy] = useState(false)
+  const [activePanel, setActivePanel] = useState<"dashboard" | "widget" | "revenue">("dashboard")
   const widgetCode = state.partner?.widgetCode || ""
   const metrics = state.metrics || { orders: 0, revenueCents: 0, partnerShareCents: 0 }
 
@@ -83,18 +84,9 @@ export default function DashboardPage() {
             <p className="mt-2 text-sm text-[#b9cbbc]">{state.partner.business_name}</p>
           </div>
           <div className="mt-8 space-y-3 text-sm text-[#b9cbbc]">
-            <div className="flex items-center gap-3 border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-3 py-3 text-[#56ffa8]">
-              <ShieldCheck className="h-4 w-4" />
-              Dashboard
-            </div>
-            <div className="flex items-center gap-3 border border-[#3b4a3f]/25 px-3 py-3">
-              <Code2 className="h-4 w-4 text-[#00d1ff]" />
-              Widget code
-            </div>
-            <div className="flex items-center gap-3 border border-[#3b4a3f]/25 px-3 py-3">
-              <DollarSign className="h-4 w-4 text-[#00d1ff]" />
-              Revenue summary
-            </div>
+            <RailButton icon={ShieldCheck} label="Dashboard" active={activePanel === "dashboard"} onClick={() => setActivePanel("dashboard")} />
+            <RailButton icon={Code2} label="Widget code" active={activePanel === "widget"} onClick={() => setActivePanel("widget")} />
+            <RailButton icon={DollarSign} label="Revenue summary" active={activePanel === "revenue"} onClick={() => setActivePanel("revenue")} />
           </div>
         </aside>
 
@@ -144,50 +136,13 @@ export default function DashboardPage() {
               </button>
             </div>
           ) : state.partner.status === "approved" ? (
-            <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[1.45fr_0.75fr]">
-              <div className="glass-panel min-w-0 overflow-hidden p-5">
-                <div className="flex flex-col gap-3 border-b border-[#3b4a3f]/25 pb-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Widget code</p>
-                    <p className="mt-1 text-sm text-[#b9cbbc]">Install this script on the approved partner website.</p>
-                  </div>
-                  <button className="button-secondary shrink-0 px-4 py-3" onClick={copyWidgetCode} title="Copy widget code">
-                    <Copy className="h-4 w-4" />
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-                <textarea
-                  className="mt-5 block h-44 w-full resize-none overflow-auto border border-[#00d1ff]/20 bg-[#020617] p-5 font-mono text-xs leading-7 text-[#00ff9d] outline-none"
-                  readOnly
-                  value={widgetCode}
-                  aria-label="Widget code"
-                />
-              </div>
-
-              <div className="grid gap-6">
-                <div className="glass-panel p-5">
-                  <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Payout status</p>
-                  <div className="mt-4 flex items-start gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center border border-[#00ff9d]/25 bg-[#00ff9d]/10 text-[#56ffa8]">
-                      <CheckCircle2 className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <p className="font-bold text-[#f4fff3]">Stripe connected</p>
-                      <p className="mt-1 text-sm leading-6 text-[#b9cbbc]">Partner income is tracked from completed widget orders.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="glass-panel p-5">
-                  <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Order summary</p>
-                  <div className="mt-4 space-y-3 text-sm">
-                    <SummaryRow label="Orders placed" value={metrics.orders} />
-                    <SummaryRow label="Total revenue" value={formatMoney(metrics.revenueCents)} />
-                    <SummaryRow label="Partner income" value={formatMoney(metrics.partnerShareCents)} highlight />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <PartnerPanel
+              activePanel={activePanel}
+              copied={copied}
+              metrics={metrics}
+              widgetCode={widgetCode}
+              onCopy={copyWidgetCode}
+            />
           ) : (
             <div className="glass-panel mt-6 p-6 text-[#b9cbbc]">
               Your application is not approved yet. Once approved, this page will show widget code, orders, and income.
@@ -197,6 +152,171 @@ export default function DashboardPage() {
       </section>
     </main>
   )
+}
+
+function RailButton({ icon: Icon, label, active, onClick }: { icon: any; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 border px-3 py-3 text-left transition ${
+        active
+          ? "border-[#00ff9d]/20 bg-[#00ff9d]/10 text-[#56ffa8]"
+          : "border-[#3b4a3f]/25 text-[#b9cbbc] hover:border-[#00d1ff]/35 hover:text-[#00d1ff]"
+      }`}
+    >
+      <Icon className={`h-4 w-4 ${active ? "text-[#00ff9d]" : "text-[#00d1ff]"}`} />
+      {label}
+    </button>
+  )
+}
+
+function PartnerPanel({
+  activePanel,
+  copied,
+  metrics,
+  widgetCode,
+  onCopy,
+}: {
+  activePanel: "dashboard" | "widget" | "revenue"
+  copied: boolean
+  metrics: any
+  widgetCode: string
+  onCopy: () => void
+}) {
+  if (activePanel === "widget") {
+    return (
+      <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <WidgetCodeCard copied={copied} widgetCode={widgetCode} onCopy={onCopy} tall />
+        <InstallInstructions widgetCode={widgetCode} />
+      </div>
+    )
+  }
+
+  if (activePanel === "revenue") {
+    return (
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="glass-panel p-6">
+          <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Orders placed</p>
+          <p className="mt-4 text-5xl font-black text-[#f4fff3]">{metrics.orders}</p>
+        </div>
+        <div className="glass-panel p-6">
+          <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Total revenue</p>
+          <p className="mt-4 text-5xl font-black text-[#f4fff3]">{formatMoney(metrics.revenueCents)}</p>
+        </div>
+        <div className="glass-panel p-6">
+          <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Partner income</p>
+          <p className="mt-4 text-5xl font-black text-[#00ff9d]">{formatMoney(metrics.partnerShareCents)}</p>
+        </div>
+        <div className="glass-panel p-6 lg:col-span-3">
+          <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Revenue summary</p>
+          <div className="mt-5 grid gap-4 text-sm md:grid-cols-3">
+            <SummaryRow label="Orders placed" value={metrics.orders} />
+            <SummaryRow label="Total revenue" value={formatMoney(metrics.revenueCents)} />
+            <SummaryRow label="Partner income" value={formatMoney(metrics.partnerShareCents)} highlight />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[1.45fr_0.75fr]">
+      <WidgetCodeCard copied={copied} widgetCode={widgetCode} onCopy={onCopy} />
+
+      <div className="grid gap-6">
+        <div className="glass-panel p-5">
+          <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Payout status</p>
+          <div className="mt-4 flex items-start gap-3">
+            <span className="flex h-10 w-10 items-center justify-center border border-[#00ff9d]/25 bg-[#00ff9d]/10 text-[#56ffa8]">
+              <CheckCircle2 className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-bold text-[#f4fff3]">Stripe connected</p>
+              <p className="mt-1 text-sm leading-6 text-[#b9cbbc]">Partner income is tracked from completed widget orders.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-panel p-5">
+          <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Order summary</p>
+          <div className="mt-4 space-y-3 text-sm">
+            <SummaryRow label="Orders placed" value={metrics.orders} />
+            <SummaryRow label="Total revenue" value={formatMoney(metrics.revenueCents)} />
+            <SummaryRow label="Partner income" value={formatMoney(metrics.partnerShareCents)} highlight />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function WidgetCodeCard({ copied, widgetCode, onCopy, tall = false }: { copied: boolean; widgetCode: string; onCopy: () => void; tall?: boolean }) {
+  return (
+    <div className="glass-panel min-w-0 overflow-hidden p-5">
+      <div className="flex flex-col gap-3 border-b border-[#3b4a3f]/25 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Widget code</p>
+          <p className="mt-1 text-sm text-[#b9cbbc]">Install this script on the approved partner website.</p>
+        </div>
+        <button className="button-secondary shrink-0 px-4 py-3" onClick={onCopy} title="Copy widget code">
+          <Copy className="h-4 w-4" />
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <textarea
+        className={`mt-5 block w-full resize-none overflow-auto border border-[#00d1ff]/20 bg-[#020617] p-5 font-mono text-xs leading-7 text-[#00ff9d] outline-none ${tall ? "h-64" : "h-44"}`}
+        readOnly
+        value={widgetCode}
+        aria-label="Widget code"
+      />
+    </div>
+  )
+}
+
+function InstallInstructions({ widgetCode }: { widgetCode: string }) {
+  return (
+    <div className="glass-panel p-5">
+      <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">How to add it</p>
+      <div className="mt-5 space-y-5">
+        <InstructionBlock title="HTML">
+          Paste the widget script before the closing body tag.
+          <CodeBlock code={`<!-- before </body> -->\n${widgetCode}`} />
+        </InstructionBlock>
+
+        <InstructionBlock title="React">
+          Add the script once inside a component effect.
+          <CodeBlock code={`useEffect(() => {\n  const script = document.createElement("script")\n  script.src = "${getScriptSrc(widgetCode)}"\n  script.async = true\n  script.dataset.partnerKey = "${getWidgetAttr(widgetCode, "data-partner-key")}"\n  script.dataset.productName = "${getWidgetAttr(widgetCode, "data-product-name")}"\n  script.dataset.partnerShareBps = "${getWidgetAttr(widgetCode, "data-partner-share-bps")}"\n  script.dataset.accent = "${getWidgetAttr(widgetCode, "data-accent")}"\n  document.body.appendChild(script)\n  return () => script.remove()\n}, [])`} />
+        </InstructionBlock>
+
+        <InstructionBlock title="Next.js">
+          Use the Next Script component on the page where the widget should appear.
+          <CodeBlock code={`import Script from "next/script"\n\n<Script\n  src="${getScriptSrc(widgetCode)}"\n  data-partner-key="${getWidgetAttr(widgetCode, "data-partner-key")}"\n  data-product-name="${getWidgetAttr(widgetCode, "data-product-name")}"\n  data-partner-share-bps="${getWidgetAttr(widgetCode, "data-partner-share-bps")}"\n  data-accent="${getWidgetAttr(widgetCode, "data-accent")}"\n  strategy="afterInteractive"\n/>`} />
+        </InstructionBlock>
+      </div>
+    </div>
+  )
+}
+
+function InstructionBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="font-bold text-[#f4fff3]">{title}</h3>
+      <div className="mt-2 text-sm leading-6 text-[#b9cbbc]">{children}</div>
+    </div>
+  )
+}
+
+function CodeBlock({ code }: { code: string }) {
+  return <pre className="mt-3 max-h-44 overflow-auto border border-[#00d1ff]/20 bg-[#020617] p-3 font-mono text-[11px] leading-5 text-[#00ff9d]">{code}</pre>
+}
+
+function getWidgetAttr(widgetCode: string, attr: string) {
+  return widgetCode.match(new RegExp(`${attr}="([^"]*)"`))?.[1] || ""
+}
+
+function getScriptSrc(widgetCode: string) {
+  return getWidgetAttr(widgetCode, "src")
 }
 
 function formatMoney(cents = 0) {
