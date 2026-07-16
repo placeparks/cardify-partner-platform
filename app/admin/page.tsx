@@ -8,6 +8,7 @@ export default function AdminPage() {
   const [state, setState] = useState<any>({ loading: true, requests: [] })
   const [savingId, setSavingId] = useState("")
   const [notice, setNotice] = useState("")
+  const [activePanel, setActivePanel] = useState<"overview" | "pending" | "approved" | "declined" | "widget">("overview")
 
   async function load() {
     const response = await fetch("/api/admin/partnerships", { cache: "no-store" })
@@ -49,6 +50,9 @@ export default function AdminPage() {
     }
   }, [state.requests])
   const pendingRequests = useMemo(() => (state.requests || []).filter((request: any) => request.status === "pending"), [state.requests])
+  const approvedRequests = useMemo(() => (state.requests || []).filter((request: any) => request.status === "approved"), [state.requests])
+  const declinedRequests = useMemo(() => (state.requests || []).filter((request: any) => request.status === "declined"), [state.requests])
+  const widgetRequests = useMemo(() => (state.requests || []).filter((request: any) => request.status === "approved" && request.widget_partner_key), [state.requests])
   const reviewedRequests = useMemo(() => (state.requests || []).filter((request: any) => request.status !== "pending"), [state.requests])
 
   if (state.loading) {
@@ -86,10 +90,10 @@ export default function AdminPage() {
         </div>
 
         <nav className="space-y-2 text-sm">
-          <AdminRailItem icon={LayoutDashboard} label="Overview" active />
-          <AdminRailItem icon={Clock3} label="Pending" />
-          <AdminRailItem icon={CheckCircle2} label="Approved" />
-          <AdminRailItem icon={Code2} label="Widget access" />
+          <AdminRailItem icon={LayoutDashboard} label="Overview" active={activePanel === "overview"} onClick={() => setActivePanel("overview")} />
+          <AdminRailItem icon={Clock3} label="Pending" active={activePanel === "pending"} onClick={() => setActivePanel("pending")} />
+          <AdminRailItem icon={CheckCircle2} label="Approved" active={activePanel === "approved"} onClick={() => setActivePanel("approved")} />
+          <AdminRailItem icon={Code2} label="Widget access" active={activePanel === "widget"} onClick={() => setActivePanel("widget")} />
         </nav>
       </aside>
 
@@ -102,10 +106,10 @@ export default function AdminPage() {
         </header>
 
         <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total requests" value={stats.total} tone="green" icon={Mail} />
-          <StatCard label="Pending apps" value={stats.pending} tone="cyan" icon={Clock3} />
-          <StatCard label="Approved" value={stats.approved} tone="green" icon={CheckCircle2} />
-          <StatCard label="Declined" value={stats.declined} tone="pink" icon={XCircle} />
+          <StatCard label="Total requests" value={stats.total} tone="green" icon={Mail} active={activePanel === "overview"} onClick={() => setActivePanel("overview")} />
+          <StatCard label="Pending apps" value={stats.pending} tone="cyan" icon={Clock3} active={activePanel === "pending"} onClick={() => setActivePanel("pending")} />
+          <StatCard label="Approved" value={stats.approved} tone="green" icon={CheckCircle2} active={activePanel === "approved"} onClick={() => setActivePanel("approved")} />
+          <StatCard label="Declined" value={stats.declined} tone="pink" icon={XCircle} active={activePanel === "declined"} onClick={() => setActivePanel("declined")} />
         </section>
 
         <div className="mb-6 flex items-center gap-2 border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#56ffa8] md:w-fit">
@@ -120,39 +124,16 @@ export default function AdminPage() {
         )}
 
         <section className="grid gap-6 xl:grid-cols-[1.55fr_0.8fr]">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 font-sora text-2xl font-bold text-[#f4fff3]">
-                <Clock3 className="h-5 w-5 text-[#00ff9d]" />
-                Pending Applications
-              </h2>
-              <span className="font-mono text-xs uppercase tracking-widest text-[#00d1ff]">{stats.pending} waiting</span>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              {pendingRequests.map((request: any) => (
-                <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={decide} compact />
-              ))}
-              {pendingRequests.length === 0 && (
-                <div className="glass-card border border-[#3b4a3f]/25 p-8 text-center text-[#b9cbbc] md:col-span-2">No pending partnership requests.</div>
-              )}
-            </div>
-
-            <div className="glass-panel overflow-hidden">
-              <div className="border-b border-[#3b4a3f]/25 bg-[#0c1324]/70 px-5 py-4">
-                <h2 className="font-sora text-xl font-bold text-[#f4fff3]">Reviewed partners</h2>
-                <p className="mt-1 text-sm text-[#b9cbbc]">Approved and declined applications from the database.</p>
-              </div>
-              <div className="grid gap-3 p-4">
-                {reviewedRequests.map((request: any) => (
-                  <ReviewedRequest key={request.id} request={request} />
-                ))}
-                {reviewedRequests.length === 0 && (
-                  <div className="glass-card p-8 text-center text-[#b9cbbc]">No reviewed requests yet.</div>
-                )}
-              </div>
-            </div>
-          </div>
+          <AdminContent
+            activePanel={activePanel}
+            approvedRequests={approvedRequests}
+            declinedRequests={declinedRequests}
+            pendingRequests={pendingRequests}
+            reviewedRequests={reviewedRequests}
+            savingId={savingId}
+            widgetRequests={widgetRequests}
+            onDecide={decide}
+          />
 
           <aside className="space-y-6">
             <div className="glass-panel overflow-hidden">
@@ -182,20 +163,137 @@ export default function AdminPage() {
   )
 }
 
-function AdminRailItem({ icon: Icon, label, active = false }: { icon: any; label: string; active?: boolean }) {
+function AdminContent({
+  activePanel,
+  approvedRequests,
+  declinedRequests,
+  pendingRequests,
+  reviewedRequests,
+  savingId,
+  widgetRequests,
+  onDecide,
+}: {
+  activePanel: "overview" | "pending" | "approved" | "declined" | "widget"
+  approvedRequests: any[]
+  declinedRequests: any[]
+  pendingRequests: any[]
+  reviewedRequests: any[]
+  savingId: string
+  widgetRequests: any[]
+  onDecide: Function
+}) {
+  if (activePanel === "pending") {
+    return (
+      <div className="space-y-6">
+        <PanelHeading icon={Clock3} title="Pending Applications" detail={`${pendingRequests.length} waiting`} />
+        <div className="grid gap-4 md:grid-cols-2">
+          {pendingRequests.map((request: any) => (
+            <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={onDecide} compact />
+          ))}
+          {pendingRequests.length === 0 && <EmptyPanel>No pending partnership requests.</EmptyPanel>}
+        </div>
+      </div>
+    )
+  }
+
+  if (activePanel === "approved") {
+    return (
+      <div className="space-y-6">
+        <PanelHeading icon={CheckCircle2} title="Approved Partners" detail={`${approvedRequests.length} approved`} />
+        <div className="grid gap-3">
+          {approvedRequests.map((request: any) => (
+            <ReviewedRequest key={request.id} request={request} />
+          ))}
+          {approvedRequests.length === 0 && <EmptyPanel>No approved partners yet.</EmptyPanel>}
+        </div>
+      </div>
+    )
+  }
+
+  if (activePanel === "declined") {
+    return (
+      <div className="space-y-6">
+        <PanelHeading icon={XCircle} title="Declined Requests" detail={`${declinedRequests.length} declined`} />
+        <div className="grid gap-3">
+          {declinedRequests.map((request: any) => (
+            <ReviewedRequest key={request.id} request={request} />
+          ))}
+          {declinedRequests.length === 0 && <EmptyPanel>No declined requests.</EmptyPanel>}
+        </div>
+      </div>
+    )
+  }
+
+  if (activePanel === "widget") {
+    return (
+      <div className="space-y-6">
+        <PanelHeading icon={Code2} title="Widget Access" detail={`${widgetRequests.length} ready`} />
+        <div className="grid gap-3">
+          {widgetRequests.map((request: any) => (
+            <WidgetAccessCard key={request.id} request={request} />
+          ))}
+          {widgetRequests.length === 0 && <EmptyPanel>No approved partners with widget access yet.</EmptyPanel>}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 font-mono text-xs uppercase tracking-wider transition ${
-      active
-        ? "border-r-4 border-[#00ff9d] bg-[#00ff9d]/15 text-[#56ffa8] shadow-[inset_0_0_18px_rgba(0,255,157,0.12)]"
-        : "text-[#b9cbbc]"
-    }`}>
-      <Icon className="h-4 w-4" />
-      {label}
+    <div className="space-y-6">
+      <PanelHeading icon={Clock3} title="Pending Applications" detail={`${pendingRequests.length} waiting`} />
+      <div className="grid gap-4 md:grid-cols-2">
+        {pendingRequests.map((request: any) => (
+          <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={onDecide} compact />
+        ))}
+        {pendingRequests.length === 0 && <EmptyPanel>No pending partnership requests.</EmptyPanel>}
+      </div>
+
+      <div className="glass-panel overflow-hidden">
+        <div className="border-b border-[#3b4a3f]/25 bg-[#0c1324]/70 px-5 py-4">
+          <h2 className="font-sora text-xl font-bold text-[#f4fff3]">Reviewed partners</h2>
+          <p className="mt-1 text-sm text-[#b9cbbc]">Approved and declined applications from the database.</p>
+        </div>
+        <div className="grid gap-3 p-4">
+          {reviewedRequests.map((request: any) => (
+            <ReviewedRequest key={request.id} request={request} />
+          ))}
+          {reviewedRequests.length === 0 && <div className="glass-card p-8 text-center text-[#b9cbbc]">No reviewed requests yet.</div>}
+        </div>
+      </div>
     </div>
   )
 }
 
-function StatCard({ label, value, tone, icon: Icon }: { label: string; value: number; tone: "green" | "cyan" | "pink"; icon: any }) {
+function PanelHeading({ icon: Icon, title, detail }: { icon: any; title: string; detail: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <h2 className="flex items-center gap-2 font-sora text-2xl font-bold text-[#f4fff3]">
+        <Icon className="h-5 w-5 text-[#00ff9d]" />
+        {title}
+      </h2>
+      <span className="font-mono text-xs uppercase tracking-widest text-[#00d1ff]">{detail}</span>
+    </div>
+  )
+}
+
+function EmptyPanel({ children }: { children: React.ReactNode }) {
+  return <div className="glass-card border border-[#3b4a3f]/25 p-8 text-center text-[#b9cbbc] md:col-span-2">{children}</div>
+}
+
+function AdminRailItem({ icon: Icon, label, active = false, onClick }: { icon: any; label: string; active?: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className={`flex w-full items-center gap-3 px-4 py-3 text-left font-mono text-xs uppercase tracking-wider transition ${
+      active
+        ? "border-r-4 border-[#00ff9d] bg-[#00ff9d]/15 text-[#56ffa8] shadow-[inset_0_0_18px_rgba(0,255,157,0.12)]"
+        : "text-[#b9cbbc] hover:bg-[#00d1ff]/10 hover:text-[#00d1ff]"
+    }`}>
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  )
+}
+
+function StatCard({ label, value, tone, icon: Icon, active = false, onClick }: { label: string; value: number; tone: "green" | "cyan" | "pink"; icon: any; active?: boolean; onClick?: () => void }) {
   const toneClasses = {
     green: "text-[#00ff9d] bg-[#00ff9d]/10 border-[#00ff9d]/20",
     cyan: "text-[#14d1ff] bg-[#14d1ff]/10 border-[#14d1ff]/20",
@@ -203,7 +301,7 @@ function StatCard({ label, value, tone, icon: Icon }: { label: string; value: nu
   }[tone]
 
   return (
-    <div className="glass-card rounded-xl p-5">
+    <button type="button" onClick={onClick} className={`glass-card rounded-xl p-5 text-left transition hover:border-[#00ff9d]/35 ${active ? "border border-[#00ff9d]/35 shadow-[0_0_24px_rgba(0,255,157,0.12)]" : ""}`}>
       <div className="mb-4 flex items-start justify-between">
         <span className={`flex h-10 w-10 items-center justify-center rounded border ${toneClasses}`}>
           <Icon className="h-5 w-5" />
@@ -211,7 +309,7 @@ function StatCard({ label, value, tone, icon: Icon }: { label: string; value: nu
       </div>
       <p className="font-mono text-[10px] uppercase tracking-widest text-[#b9cbbc]">{label}</p>
       <p className="mt-1 text-3xl font-black text-[#f4fff3]">{value}</p>
-    </div>
+    </button>
   )
 }
 
@@ -333,5 +431,36 @@ function ReviewedRequest({ request }: { request: any }) {
         <span className="font-black text-[#00ff9d]">{request.approved_percentage ?? request.proposed_percentage ?? 2}%</span>
       </div>
     </article>
+  )
+}
+
+function WidgetAccessCard({ request }: { request: any }) {
+  return (
+    <article className="border border-[#00d1ff]/25 bg-[#070d1f]/80 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-xl font-black text-[#f4fff3]">{request.business_name}</h3>
+          <p className="mt-2 break-all text-sm text-[#b9cbbc]">{request.website_url}</p>
+        </div>
+        <StatusBadge status={request.status} />
+      </div>
+      <div className="mt-4 border border-[#00ff9d]/20 bg-[#00ff9d]/10 p-3">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-[#56ffa8]">Partner key</p>
+        <p className="mt-2 break-all font-mono text-xs text-[#00ff9d]">{request.widget_partner_key}</p>
+      </div>
+      <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+        <AdminSummaryRow label="Approved percentage" value={`${request.approved_percentage ?? request.proposed_percentage ?? 2}%`} highlight />
+        <AdminSummaryRow label="Contact" value={request.email} />
+      </div>
+    </article>
+  )
+}
+
+function AdminSummaryRow({ label, value, highlight = false }: { label: string; value: string | number; highlight?: boolean }) {
+  return (
+    <div className="min-w-0 border border-[#3b4a3f]/20 bg-[#020617]/60 p-3">
+      <p className="font-mono text-[10px] uppercase tracking-widest text-[#b9cbbc]">{label}</p>
+      <p className={`mt-2 break-all text-sm font-bold ${highlight ? "text-[#00ff9d]" : "text-[#f4fff3]"}`}>{value}</p>
+    </div>
   )
 }
