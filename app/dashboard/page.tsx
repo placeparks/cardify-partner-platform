@@ -13,6 +13,12 @@ export default function DashboardPage() {
     fetch("/api/partnership/me").then(async (response) => {
       const data = await response.json()
       setState({ ...data, loading: false, status: response.status })
+
+      if (response.ok && !data.partner) {
+        const navResponse = await fetch("/api/session/nav", { cache: "no-store" })
+        const navData = await navResponse.json()
+        if (navData.isAdmin) window.location.replace("/admin")
+      }
     })
   }, [])
 
