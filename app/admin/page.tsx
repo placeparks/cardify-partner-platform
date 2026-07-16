@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Check, CheckCircle2, Clock3, Mail, Percent, ShieldCheck, X, XCircle } from "lucide-react"
+import { Check, CheckCircle2, Clock3, Code2, LayoutDashboard, Mail, Percent, ShieldCheck, X, XCircle } from "lucide-react"
 import { signInWithGoogle } from "@/lib/supabase-browser"
 
 export default function AdminPage() {
@@ -73,29 +73,44 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#020617] px-4 py-12 text-[#dce1fb] md:px-6">
-      <section className="mx-auto max-w-[1280px]">
-        <div className="glass-panel overflow-hidden">
-          <div className="flex flex-col gap-5 border-b border-[#3b4a3f]/30 p-6 md:flex-row md:items-end md:justify-between">
+    <main className="min-h-screen bg-[#020617] text-[#dce1fb]">
+      <aside className="fixed bottom-0 left-0 top-16 z-20 hidden w-64 flex-col border-r border-[#3b4a3f]/30 bg-[#070d1f]/90 p-4 backdrop-blur-2xl lg:flex">
+        <div className="mb-8 mt-4 flex items-center gap-3 px-2">
+          <span className="flex h-10 w-10 items-center justify-center rounded bg-[#00ff9d] text-[#00391f]">
+            <ShieldCheck className="h-5 w-5" />
+          </span>
           <div>
-            <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-[#00ff9d]">Admin review panel</p>
-            <h1 className="mt-3 text-4xl font-black text-[#f4fff3] md:text-5xl">Partnership control room</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#b9cbbc]">
-              Review partner applications, set the final percentage, and approve or decline the request.
-            </p>
+            <p className="font-mono text-sm font-bold text-[#f4fff3]">Cardify Admin</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-[#00ff9d]">Review access</p>
           </div>
-          <div className="flex items-center gap-2 border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#56ffa8]">
-            <ShieldCheck className="h-4 w-4" />
-            Authorized admin
-          </div>
-          </div>
+        </div>
 
-          <section className="grid gap-4 p-5 md:grid-cols-4">
-            <StatCard label="Total requests" value={stats.total} tone="green" icon={Mail} />
-            <StatCard label="Pending review" value={stats.pending} tone="cyan" icon={Clock3} />
-            <StatCard label="Approved" value={stats.approved} tone="green" icon={CheckCircle2} />
-            <StatCard label="Declined" value={stats.declined} tone="pink" icon={XCircle} />
-          </section>
+        <nav className="space-y-2 text-sm">
+          <AdminRailItem icon={LayoutDashboard} label="Overview" active />
+          <AdminRailItem icon={Clock3} label="Pending" />
+          <AdminRailItem icon={CheckCircle2} label="Approved" />
+          <AdminRailItem icon={Code2} label="Widget access" />
+        </nav>
+      </aside>
+
+      <section className="mx-auto max-w-[1280px] px-4 pb-12 pt-8 md:px-6 lg:ml-64">
+        <header className="mb-8">
+          <h1 className="text-4xl font-black text-[#f4fff3]">Admin Review Panel</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#b9cbbc]">
+            Manage partnership requests, review submitted shop details, and set the final partner percentage.
+          </p>
+        </header>
+
+        <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Total requests" value={stats.total} tone="green" icon={Mail} />
+          <StatCard label="Pending apps" value={stats.pending} tone="cyan" icon={Clock3} />
+          <StatCard label="Approved" value={stats.approved} tone="green" icon={CheckCircle2} />
+          <StatCard label="Declined" value={stats.declined} tone="pink" icon={XCircle} />
+        </section>
+
+        <div className="mb-6 flex items-center gap-2 border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-4 py-3 font-mono text-xs uppercase tracking-wider text-[#56ffa8] md:w-fit">
+          <ShieldCheck className="h-4 w-4" />
+          Authorized admin
         </div>
 
         {notice && (
@@ -104,43 +119,79 @@ export default function AdminPage() {
           </div>
         )}
 
-        <section className="mt-8 grid gap-6 xl:grid-cols-[1.45fr_0.75fr]">
-          <div className="glass-panel overflow-hidden">
-            <div className="flex flex-col gap-2 border-b border-[#3b4a3f]/25 px-5 py-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="font-sora text-2xl font-bold text-[#f4fff3]">Pending applications</h2>
-                <p className="mt-1 text-sm text-[#b9cbbc]">Only saved partnership requests appear here.</p>
-              </div>
-              <p className="font-mono text-xs uppercase tracking-widest text-[#00d1ff]">{stats.pending} waiting</p>
+        <section className="grid gap-6 xl:grid-cols-[1.55fr_0.8fr]">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="flex items-center gap-2 font-sora text-2xl font-bold text-[#f4fff3]">
+                <Clock3 className="h-5 w-5 text-[#00ff9d]" />
+                Pending Applications
+              </h2>
+              <span className="font-mono text-xs uppercase tracking-widest text-[#00d1ff]">{stats.pending} waiting</span>
             </div>
 
-            <div className="grid gap-4 p-4">
+            <div className="grid gap-4 md:grid-cols-2">
               {pendingRequests.map((request: any) => (
-                <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={decide} />
+                <RequestCard key={request.id} request={request} saving={savingId === request.id} onDecide={decide} compact />
               ))}
               {pendingRequests.length === 0 && (
-                <div className="glass-card p-8 text-center text-[#b9cbbc]">No pending partnership requests.</div>
+                <div className="glass-card border border-[#3b4a3f]/25 p-8 text-center text-[#b9cbbc] md:col-span-2">No pending partnership requests.</div>
               )}
+            </div>
+
+            <div className="glass-panel overflow-hidden">
+              <div className="border-b border-[#3b4a3f]/25 bg-[#0c1324]/70 px-5 py-4">
+                <h2 className="font-sora text-xl font-bold text-[#f4fff3]">Reviewed partners</h2>
+                <p className="mt-1 text-sm text-[#b9cbbc]">Approved and declined applications from the database.</p>
+              </div>
+              <div className="grid gap-3 p-4">
+                {reviewedRequests.map((request: any) => (
+                  <ReviewedRequest key={request.id} request={request} />
+                ))}
+                {reviewedRequests.length === 0 && (
+                  <div className="glass-card p-8 text-center text-[#b9cbbc]">No reviewed requests yet.</div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="glass-panel overflow-hidden">
-            <div className="border-b border-[#3b4a3f]/25 px-5 py-4">
-              <h2 className="font-sora text-2xl font-bold text-[#f4fff3]">Reviewed requests</h2>
-              <p className="mt-1 text-sm text-[#b9cbbc]">Approved and declined applications from the database.</p>
+          <aside className="space-y-6">
+            <div className="glass-panel overflow-hidden">
+              <div className="border-b border-[#00ff9d]/20 bg-[#00ff9d]/10 px-5 py-4">
+                <h3 className="font-sora text-xl font-bold text-[#00ff9d]">Review queue</h3>
+              </div>
+              <div className="space-y-4 p-5">
+                <QueueRow label="Pending" value={stats.pending} tone="cyan" />
+                <QueueRow label="Approved" value={stats.approved} tone="green" />
+                <QueueRow label="Declined" value={stats.declined} tone="pink" />
+              </div>
             </div>
-            <div className="grid gap-3 p-4">
-              {reviewedRequests.map((request: any) => (
-                <ReviewedRequest key={request.id} request={request} />
-              ))}
-              {reviewedRequests.length === 0 && (
-                <div className="glass-card p-8 text-center text-[#b9cbbc]">No reviewed requests yet.</div>
-              )}
+
+            <div className="glass-panel p-5">
+              <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Current actions</p>
+              <div className="mt-4 space-y-3 text-sm leading-6 text-[#b9cbbc]">
+                <p>Approve partners after checking their submitted shop details.</p>
+                <p>Set the final percentage before approval.</p>
+                <p>Approved partners receive dashboard access and widget code.</p>
+              </div>
             </div>
-          </div>
+          </aside>
         </section>
+
       </section>
     </main>
+  )
+}
+
+function AdminRailItem({ icon: Icon, label, active = false }: { icon: any; label: string; active?: boolean }) {
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 font-mono text-xs uppercase tracking-wider transition ${
+      active
+        ? "border-r-4 border-[#00ff9d] bg-[#00ff9d]/15 text-[#56ffa8] shadow-[inset_0_0_18px_rgba(0,255,157,0.12)]"
+        : "text-[#b9cbbc]"
+    }`}>
+      <Icon className="h-4 w-4" />
+      {label}
+    </div>
   )
 }
 
@@ -164,24 +215,24 @@ function StatCard({ label, value, tone, icon: Icon }: { label: string; value: nu
   )
 }
 
-function RequestCard({ request, saving, onDecide }: { request: any; saving: boolean; onDecide: Function }) {
+function RequestCard({ request, saving, onDecide, compact = false }: { request: any; saving: boolean; onDecide: Function; compact?: boolean }) {
   const [percentage, setPercentage] = useState(String(request.approved_percentage ?? request.proposed_percentage ?? 2))
   const [notes, setNotes] = useState(request.admin_notes || "")
   const isApproved = request.status === "approved"
   const isDeclined = request.status === "declined"
 
   return (
-    <article className="grid gap-5 rounded-lg border border-[#3b4a3f]/25 bg-[#070d1f]/80 p-5 transition hover:border-[#00ff9d]/35 lg:grid-cols-[1fr_300px]">
+    <article className={`h-full border border-[#3b4a3f]/25 bg-[#0c1324]/70 p-5 transition hover:border-[#00ff9d]/45 hover:shadow-[0_0_22px_rgba(0,255,157,0.10)] ${compact ? "grid gap-5" : "grid gap-5 lg:grid-cols-[1fr_300px]"}`}>
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h3 className="text-2xl font-black text-[#f4fff3]">{request.business_name}</h3>
+          <h3 className={compact ? "text-xl font-black text-[#f4fff3]" : "text-2xl font-black text-[#f4fff3]"}>{request.business_name}</h3>
           <StatusBadge status={request.status} />
         </div>
         <div className="mt-3 grid gap-2 text-sm text-[#b9cbbc] md:grid-cols-2">
           <p className="break-all">{request.email}</p>
           <p className="break-all">{request.website_url}</p>
         </div>
-        <p className="mt-4 text-sm leading-6 text-[#dce1fb]">{request.audience || "No audience notes provided."}</p>
+        <p className={`mt-4 text-sm leading-6 text-[#dce1fb] ${compact ? "line-clamp-3" : ""}`}>{request.audience || "No audience notes provided."}</p>
         <div className="mt-4 flex flex-wrap gap-3 font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">
           <span className="border border-[#3b4a3f]/30 bg-[#0c1324] px-3 py-2">Requested {request.proposed_percentage ?? 2}%</span>
           {request.widget_partner_key && <span className="border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-3 py-2 text-[#56ffa8]">Partner key saved</span>}
@@ -222,6 +273,23 @@ function RequestCard({ request, saving, onDecide }: { request: any; saving: bool
         </div>
       )}
     </article>
+  )
+}
+
+function QueueRow({ label, value, tone }: { label: string; value: number; tone: "green" | "cyan" | "pink" }) {
+  const toneClass = tone === "green" ? "bg-[#00ff9d]" : tone === "cyan" ? "bg-[#00d1ff]" : "bg-[#ffb0cd]"
+  const width = `${Math.min(100, Math.max(8, value * 12))}%`
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between text-sm">
+        <span className="text-[#b9cbbc]">{label}</span>
+        <span className="font-bold text-[#f4fff3]">{value}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-[#2e3447]">
+        <div className={`h-full ${toneClass}`} style={{ width }} />
+      </div>
+    </div>
   )
 }
 
