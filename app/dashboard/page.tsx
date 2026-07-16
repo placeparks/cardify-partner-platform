@@ -186,7 +186,7 @@ function PartnerPanel({
 }) {
   if (activePanel === "widget") {
     return (
-      <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="mt-6 grid min-w-0 gap-6">
         <WidgetCodeCard copied={copied} widgetCode={widgetCode} onCopy={onCopy} tall />
         <InstallInstructions widgetCode={widgetCode} />
       </div>
@@ -264,21 +264,23 @@ function WidgetCodeCard({ copied, widgetCode, onCopy, tall = false }: { copied: 
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <textarea
-        className={`mt-5 block w-full resize-none overflow-auto border border-[#00d1ff]/20 bg-[#020617] p-5 font-mono text-xs leading-7 text-[#00ff9d] outline-none ${tall ? "h-64" : "h-44"}`}
-        readOnly
-        value={widgetCode}
-        aria-label="Widget code"
-      />
+      <pre className={`mt-5 block w-full overflow-auto whitespace-pre-wrap break-all border border-[#00d1ff]/20 bg-[#020617] p-5 font-mono text-xs leading-7 text-[#00ff9d] outline-none ${tall ? "min-h-40" : "min-h-32"}`}>
+        {widgetCode}
+      </pre>
     </div>
   )
 }
 
 function InstallInstructions({ widgetCode }: { widgetCode: string }) {
   return (
-    <div className="glass-panel p-5">
-      <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">How to add it</p>
-      <div className="mt-5 space-y-5">
+    <div className="glass-panel overflow-hidden p-5">
+      <div className="flex flex-col gap-2 border-b border-[#3b4a3f]/25 pb-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">How to add it</p>
+          <p className="mt-1 text-sm text-[#b9cbbc]">Use the example that matches the partner website stack.</p>
+        </div>
+      </div>
+      <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-3">
         <InstructionBlock title="HTML">
           Paste the widget script before the closing body tag.
           <CodeBlock code={`<!-- before </body> -->\n${widgetCode}`} />
@@ -308,7 +310,7 @@ function InstructionBlock({ title, children }: { title: string; children: React.
 }
 
 function CodeBlock({ code }: { code: string }) {
-  return <pre className="mt-3 max-h-44 overflow-auto border border-[#00d1ff]/20 bg-[#020617] p-3 font-mono text-[11px] leading-5 text-[#00ff9d]">{code}</pre>
+  return <pre className="mt-3 max-h-64 min-w-0 overflow-auto whitespace-pre-wrap break-all border border-[#00d1ff]/20 bg-[#020617] p-3 font-mono text-[11px] leading-5 text-[#00ff9d]">{code}</pre>
 }
 
 function getWidgetAttr(widgetCode: string, attr: string) {
