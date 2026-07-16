@@ -61,7 +61,7 @@ export function makePartnerKey() {
 }
 
 export function makeWidgetSnippet(partnerKey: string) {
-  const origin = process.env.NEXT_PUBLIC_TCGPLAYTEST_WIDGET_ORIGIN || "https://tcgplaytest.com"
+  const origin = process.env.NEXT_PUBLIC_TCGPLAYTEST_WIDGET_ORIGIN || "https://testing123-prof.vercel.app"
   return `<script src="${origin}/partner-widget/widget.js" data-partner-key="${partnerKey}" data-product-name="Premium custom card printing" data-price-cents="2500" data-accent="#16a34a" async></script>`
 }
 
