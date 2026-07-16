@@ -7,12 +7,23 @@ import { getSupabaseBrowserClient, signInWithGoogle, signOut } from "@/lib/supab
 
 export function Navigation() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [canSeeDashboard, setCanSeeDashboard] = useState(false)
+  const [canSeeAdmin, setCanSeeAdmin] = useState(false)
+
+  async function refreshNavAccess() {
+    const response = await fetch("/api/session/nav", { cache: "no-store" })
+    const data = await response.json()
+    setUserEmail(data.email ?? null)
+    setCanSeeDashboard(Boolean(data.isApprovedPartner))
+    setCanSeeAdmin(Boolean(data.isAdmin))
+  }
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient()
-    supabase.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null))
+    refreshNavAccess()
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user.email ?? null)
+      refreshNavAccess()
     })
     return () => data.subscription.unsubscribe()
   }, [])
@@ -28,14 +39,18 @@ export function Navigation() {
           <Link href="/partnership" className="hidden border border-cyan/30 px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
             Partnership
           </Link>
-          <Link href="/dashboard" className="hidden border border-cyan/30 px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
-            <LayoutDashboard className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <Link href="/admin" className="hidden border border-cyan/30 px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
-            <ShieldCheck className="h-4 w-4" />
-            Admin
-          </Link>
+          {canSeeDashboard && (
+            <Link href="/dashboard" className="hidden border border-cyan/30 px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
+              <LayoutDashboard className="h-4 w-4" />
+              Dashboard
+            </Link>
+          )}
+          {canSeeAdmin && (
+            <Link href="/admin" className="hidden border border-cyan/30 px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
+              <ShieldCheck className="h-4 w-4" />
+              Admin
+            </Link>
+          )}
           {userEmail ? (
             <button onClick={signOut} className="button-secondary px-3 py-2">
               <LogOut className="h-4 w-4" />
