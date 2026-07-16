@@ -1,14 +1,9 @@
 import Link from "next/link"
-import { CheckCircle2, Code2, Copy, Eye, ShieldCheck, Sparkles } from "lucide-react"
+import { CheckCircle2, Code2, Copy, Eye, ShieldCheck } from "lucide-react"
 
 export default function HomePage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0c1324] text-[#dce1fb]">
-      <div className="pointer-events-none absolute left-7 top-36 hidden items-center gap-3 font-mono text-xs uppercase tracking-[0.28em] text-[#00ff9d]/45 lg:flex">
-        <Sparkles className="h-5 w-5" />
-        Cardify
-      </div>
-
       <section className="relative mx-auto grid max-w-[1280px] grid-cols-1 items-center gap-8 px-4 py-16 md:px-6 lg:grid-cols-2">
         <div className="z-10">
           <div className="mb-4 inline-flex items-center border border-[#00ff9d]/30 bg-[#f4fff3]/10 px-3 py-1">

@@ -1,7 +1,7 @@
 "use client"
 
 import { FormEvent, useEffect, useState } from "react"
-import { CheckCircle2, LogIn } from "lucide-react"
+import { BarChart3, CheckCircle2, Code2, LogIn, Rocket, ShieldCheck } from "lucide-react"
 import { getSupabaseBrowserClient, signInWithGoogle } from "@/lib/supabase-browser"
 
 export default function PartnershipPage() {
@@ -50,59 +50,134 @@ export default function PartnershipPage() {
   }
 
   return (
-    <section className="mx-auto grid max-w-6xl gap-8 px-5 py-12 lg:grid-cols-[0.9fr_1.1fr]">
-      <div>
-        <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Partnership</p>
-        <h1 className="mt-4 text-4xl font-black leading-tight md:text-6xl">Bring premium card printing to your platform.</h1>
-        <p className="mt-5 text-lg leading-8 text-slate-300">
-          Apply with your platform details and suggested revenue percentage. Once approved, your dashboard shows the widget code and live affiliate performance.
-        </p>
-        <div className="mt-8 grid gap-3 text-sm text-slate-300">
-          {["Customers stay on your website", "Orders save into our fulfillment database", "Approved partners receive widget code by email"].map((item) => (
-            <div key={item} className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green" />
-              {item}
-            </div>
-          ))}
-        </div>
+    <main className="relative min-h-screen overflow-hidden bg-[#020617] px-4 py-16 text-[#dce1fb] md:px-6">
+      <div className="pointer-events-none absolute inset-0 opacity-20">
+        <div className="absolute left-1/4 top-24 h-64 w-64 rounded-full bg-[#00d1ff]/20 blur-3xl" />
+        <div className="absolute bottom-20 right-1/4 h-64 w-64 rounded-full bg-[#00ff9d]/20 blur-3xl" />
       </div>
 
-      {submitted ? (
-        <div className="panel flex min-h-[320px] flex-col items-center justify-center p-6 text-center">
-          <CheckCircle2 className="h-12 w-12 text-green" />
-          <h2 className="mt-5 text-3xl font-black">Submitted</h2>
-          <p className="mt-3 max-w-md text-sm leading-6 text-slate-300">
-            Your partnership application has been received. We will review it and email you once there is an update.
-          </p>
-        </div>
-      ) : (
-      <form onSubmit={submit} className="panel grid gap-4 p-6">
-        {!user ? (
-          <div className="border border-cyan/20 bg-ink/70 p-5">
-            <p className="text-sm text-slate-300">Sign in with Google first so we can connect the application to your partner account.</p>
-            <button type="button" onClick={() => signInWithGoogle("/partnership")} className="button-primary mt-4">
-              <LogIn className="h-4 w-4" />
-              Sign in with Google
-            </button>
+      <section className="relative z-10 mx-auto grid max-w-[1280px] gap-8 lg:grid-cols-12">
+        <div className="flex flex-col justify-center lg:col-span-5">
+          <div className="mb-4 inline-flex items-center gap-2">
+            <span className="h-[2px] w-12 bg-[#00d1ff]" />
+            <span className="font-mono text-sm uppercase tracking-[0.2em] text-[#00d1ff]">Partner portal</span>
           </div>
-        ) : (
-          <p className="border border-green/25 bg-green/10 p-3 text-sm text-green">Signed in as {user.email}</p>
-        )}
 
-        <input className="field" required placeholder="Full name" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
-        <input className="field" required placeholder="Business or platform name" value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
-        <input className="field" required type="url" placeholder="Website URL" value={form.websiteUrl} onChange={(event) => setForm({ ...form, websiteUrl: event.target.value })} />
-        <textarea className="field min-h-28" placeholder="Audience, traffic, or why this is a good fit" value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} />
-        <label className="grid gap-2 text-sm text-slate-300">
-          Suggested partner percentage
-          <input className="field" required min="0" max="30" step="0.1" type="number" value={form.proposedPercentage} onChange={(event) => setForm({ ...form, proposedPercentage: event.target.value })} />
-        </label>
-        {message && <p className="border border-cyan/20 bg-ink/70 p-3 text-sm text-slate-200">{message}</p>}
-        <button disabled={!user || busy} className="button-primary">
-          {busy ? "Submitting..." : "Submit application"}
-        </button>
-      </form>
-      )}
-    </section>
+          <h1 className="font-sora text-4xl font-extrabold leading-tight text-[#dce1fb] md:text-5xl">
+            Bring premium card printing <span className="text-[#00d1ff]">into your platform</span>
+          </h1>
+          <p className="mt-5 max-w-md text-lg leading-8 text-[#b9cbbc]">
+            Apply with your shop details, preferred revenue percentage, and audience fit. Approved partners unlock the Cardify widget, Stripe onboarding, and live payout tracking.
+          </p>
+
+          <div className="mt-8 space-y-4">
+            {[
+              { icon: Rocket, title: "Partner checkout", body: "Customers upload artwork and pay without leaving your site." },
+              { icon: BarChart3, title: "Revenue tracking", body: "Dashboard metrics show orders, gross revenue, and your income." },
+              { icon: Code2, title: "Widget delivery", body: "Approved and onboarded partners receive the embed code by email." },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-4">
+                <div className="glass-panel flex h-12 w-12 items-center justify-center text-[#00d1ff] transition group-hover:scale-110">
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-sora text-lg font-semibold text-[#f4fff3]">{item.title}</h3>
+                  <p className="mt-1 text-sm leading-6 text-[#b9cbbc]">{item.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="lg:col-span-7">
+          <div className="holographic-edge glass-panel relative overflow-hidden rounded-xl p-6 md:p-10">
+            <div className="scanline-effect" />
+            <div className="relative z-10">
+              <div className="mb-8 flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#00d1ff]">Cardify access</p>
+                  <h2 className="mt-2 font-sora text-3xl font-bold text-[#f4fff3]">Application</h2>
+                </div>
+                <div className="flex">
+                  <div className="portal-energy-segment active" />
+                  <div className="portal-energy-segment active" />
+                  <div className="portal-energy-segment active" />
+                  <div className="portal-energy-segment" />
+                </div>
+              </div>
+
+              {submitted ? (
+                <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
+                  <CheckCircle2 className="h-14 w-14 text-[#00ff9d]" />
+                  <h2 className="mt-5 font-sora text-3xl font-black text-[#f4fff3]">Submitted</h2>
+                  <p className="mt-3 max-w-md text-sm leading-6 text-[#b9cbbc]">
+                    Your partnership application has been received. We will review it and email you once there is an update.
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={submit} className="space-y-6">
+                  {!user ? (
+                    <div className="border border-[#00d1ff]/20 bg-[#070d1f]/80 p-5">
+                      <p className="text-sm leading-6 text-[#b9cbbc]">Sign in with Google first so we can connect the application to your partner account.</p>
+                      <button type="button" onClick={() => signInWithGoogle("/partnership")} className="mt-4 inline-flex items-center gap-2 rounded bg-[#00ff9d] px-5 py-3 font-mono text-xs font-bold uppercase tracking-wider text-[#00391f] transition hover:scale-[1.02]">
+                        <LogIn className="h-4 w-4" />
+                        Sign in with Google
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 border border-[#00ff9d]/25 bg-[#00ff9d]/10 p-4 text-sm text-[#56ffa8]">
+                      <ShieldCheck className="h-5 w-5" />
+                      Signed in as {user.email}
+                    </div>
+                  )}
+
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <label className="grid gap-2">
+                      <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Full name</span>
+                      <input className="input-recessed p-4 font-mono text-sm uppercase text-[#dce1fb]" required placeholder="ALEX MERCER" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
+                    </label>
+                    <label className="grid gap-2">
+                      <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Email</span>
+                      <input className="input-recessed p-4 font-mono text-sm uppercase text-[#dce1fb]" readOnly value={user?.email || "SIGN IN REQUIRED"} />
+                    </label>
+                  </div>
+
+                  <label className="grid gap-2">
+                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Business / platform name</span>
+                    <input className="input-recessed p-4 font-mono text-sm uppercase text-[#dce1fb]" required placeholder="YOUR SHOP OR COMMUNITY" value={form.businessName} onChange={(event) => setForm({ ...form, businessName: event.target.value })} />
+                  </label>
+
+                  <label className="grid gap-2">
+                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Website URL</span>
+                    <input className="input-recessed w-full p-4 font-mono text-sm text-[#dce1fb]" required type="url" placeholder="https://yourwebsite.com" value={form.websiteUrl} onChange={(event) => setForm({ ...form, websiteUrl: event.target.value })} />
+                  </label>
+
+                  <label className="grid gap-2">
+                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Suggested partner percentage</span>
+                    <div className="flex items-center gap-3">
+                      <input className="input-recessed w-full p-4 font-mono text-sm text-[#dce1fb]" required min="0" max="30" step="0.1" type="number" value={form.proposedPercentage} onChange={(event) => setForm({ ...form, proposedPercentage: event.target.value })} />
+                      <span className="border border-[#00d1ff]/20 bg-[#070d1f]/80 px-4 py-4 font-mono text-sm text-[#00d1ff]">%</span>
+                    </div>
+                  </label>
+
+                  <label className="grid gap-2">
+                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Audience and fit</span>
+                    <textarea className="input-recessed min-h-32 resize-none p-4 font-mono text-sm uppercase text-[#dce1fb]" placeholder="Tell us about your customers, traffic, and why Cardify fits your platform..." value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} />
+                  </label>
+
+                  {message && <p className="border border-[#ffb4ab]/25 bg-[#93000a]/20 p-3 text-sm text-[#ffb4ab]">{message}</p>}
+
+                  <button disabled={!user || busy} className="group relative w-full overflow-hidden rounded bg-[#00d1ff] py-4 font-sora text-sm font-bold uppercase tracking-[0.2em] text-[#003543] transition hover:-translate-y-0.5 hover:shadow-[0_0_25px_rgba(0,209,255,0.6)] disabled:cursor-not-allowed disabled:opacity-50">
+                    <span className="relative z-10">{busy ? "Submitting..." : "Initialize application"}</span>
+                    <span className="absolute inset-0 -translate-x-full skew-x-12 bg-white/20 transition-transform duration-700 group-hover:translate-x-full" />
+                  </button>
+                  <p className="text-center font-mono text-xs uppercase tracking-wider text-[#b9cbbc]/60">System ready. Awaiting partner input.</p>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   )
 }
