@@ -7,7 +7,7 @@ export default function HomePage() {
       <div>
         <p className="font-mono text-sm font-bold uppercase tracking-[0.28em] text-green">Cardify partner platform</p>
         <h1 className="mt-5 max-w-3xl text-5xl font-black leading-tight md:text-7xl">
-          Printed cards without leaving the shop.
+          Printed cards without leaving the platform.
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
           Partners install a tiny TCGPlaytest-powered checkout widget, customers upload artwork on the partner site, and Cardify tracks orders, revenue, and payouts.
