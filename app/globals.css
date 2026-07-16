@@ -36,6 +36,28 @@ select {
   @apply border border-cyan/20 bg-white/[0.04] shadow-[0_0_40px_rgba(34,211,238,0.08)];
 }
 
+.glass-panel {
+  @apply border border-cyan/20 bg-white/[0.055] shadow-[0_0_40px_rgba(34,211,238,0.08)] backdrop-blur-xl;
+}
+
+.holo-card {
+  background:
+    linear-gradient(135deg, rgba(0, 255, 157, 0.12), rgba(0, 209, 255, 0.1), rgba(236, 72, 153, 0.1)),
+    rgba(15, 23, 42, 0.62);
+}
+
+.holo-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #00ff9d, #00d1ff, #ec4899);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
 .button-primary {
   @apply inline-flex items-center justify-center gap-2 border border-green bg-green px-5 py-3 text-sm font-bold uppercase tracking-wider text-ink transition hover:bg-transparent hover:text-green disabled:cursor-not-allowed disabled:opacity-50;
 }
