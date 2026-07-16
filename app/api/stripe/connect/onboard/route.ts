@@ -3,7 +3,7 @@ import { getSignedInUser } from "@/lib/partnership"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { cardifyAppOrigin, stripeRequest } from "@/lib/stripe-connect"
 
-export async function POST() {
+export async function POST(request: Request) {
   const { user } = await getSignedInUser()
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 })
 
@@ -45,7 +45,7 @@ export async function POST() {
         .eq("id", partner.id)
     }
 
-    const origin = cardifyAppOrigin()
+    const origin = cardifyAppOrigin(request.headers.get("origin"))
     const link = await stripeRequest("/account_links", new URLSearchParams({
       account: accountId,
       refresh_url: `${origin}/dashboard?connect=refresh`,

@@ -12,6 +12,9 @@ create table if not exists public.partnership_requests (
   approved_percentage numeric(5,2) check (approved_percentage >= 0 and approved_percentage <= 30),
   status text not null default 'pending' check (status in ('pending', 'approved', 'declined')),
   widget_partner_key text unique,
+  stripe_account_id text,
+  stripe_onboarding_complete boolean not null default false,
+  widget_email_sent_at timestamptz,
   admin_notes text,
   reviewed_by text,
   reviewed_at timestamptz,
@@ -34,6 +37,7 @@ create table if not exists public.partner_affiliate_orders (
 );
 
 create index if not exists idx_partnership_requests_status on public.partnership_requests(status);
+create index if not exists idx_partnership_requests_stripe_account_id on public.partnership_requests(stripe_account_id);
 create index if not exists idx_partner_affiliate_orders_partner_request_id on public.partner_affiliate_orders(partner_request_id);
 create index if not exists idx_partner_affiliate_orders_partner_key on public.partner_affiliate_orders(partner_key);
 

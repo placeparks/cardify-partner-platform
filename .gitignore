@@ -38,3 +38,16 @@ next-env.d.ts
 
 # local tracking
 kainat.md
+
+
+app/print-your-cards/page.tsx
+app/api/partner/widget-order/route.ts
+app/api/partner/widget-order/confirm/route.ts
+public/partner-widget/widget.js
+
+app/embed/partner-checkout/page.tsx
+app/partner-widget-demo/page.tsx
+app/api/webhook/route.ts
+next.config.js
+package-lock.json
+package.json

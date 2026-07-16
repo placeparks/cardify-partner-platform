@@ -8,8 +8,13 @@ function stripeAuthHeader() {
   return `Basic ${Buffer.from(`${stripeSecretKey()}:`).toString("base64")}`
 }
 
-export function cardifyAppOrigin() {
-  return (process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL || "http://localhost:3000").replace(/\/$/, "")
+export function cardifyAppOrigin(requestOrigin?: string | null) {
+  return (
+    process.env.NEXT_PUBLIC_CARDIFY_APP_URL
+    || process.env.CARDIFY_APP_URL
+    || requestOrigin
+    || "http://localhost:3000"
+  ).replace(/\/$/, "")
 }
 
 export async function stripeRequest(path: string, body?: URLSearchParams, method = "POST") {
