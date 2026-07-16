@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSignedInUser } from "@/lib/partnership"
+import { getSignedInUser, sendWidgetReadyEmail } from "@/lib/partnership"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { isStripeAccountReady, stripeRequest } from "@/lib/stripe-connect"
 
@@ -9,7 +9,7 @@ export async function GET() {
 
   const { data: partner, error } = await supabaseAdmin
     .from("partnership_requests")
-    .select("id, stripe_account_id, stripe_onboarding_complete")
+    .select("*")
     .eq("user_id", user.id)
     .maybeSingle()
 
@@ -21,6 +21,7 @@ export async function GET() {
   try {
     const account = await stripeRequest(`/accounts/${partner.stripe_account_id}`, undefined, "GET")
     const onboardingComplete = isStripeAccountReady(account)
+    let widgetEmail = null as null | { sent: boolean; reason?: string }
 
     if (partner.stripe_onboarding_complete !== onboardingComplete) {
       await supabaseAdmin
@@ -32,9 +33,28 @@ export async function GET() {
         .eq("id", partner.id)
     }
 
+    if (onboardingComplete && !partner.widget_email_sent_at) {
+      widgetEmail = await sendWidgetReadyEmail({ ...partner, stripe_onboarding_complete: onboardingComplete })
+        .catch((caught) => ({
+          sent: false,
+          reason: caught instanceof Error ? caught.message : "Widget email crashed before returning a response.",
+        }))
+
+      if (widgetEmail.sent) {
+        await supabaseAdmin
+          .from("partnership_requests")
+          .update({
+            widget_email_sent_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", partner.id)
+      }
+    }
+
     return NextResponse.json({
       connected: Boolean(partner.stripe_account_id),
       onboardingComplete,
+      widgetEmail,
       chargesEnabled: Boolean(account.charges_enabled),
       payoutsEnabled: Boolean(account.payouts_enabled),
       detailsSubmitted: Boolean(account.details_submitted),
