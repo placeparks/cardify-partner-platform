@@ -17,7 +17,6 @@ export default function HomePage() {
             Apply for partnership
             <ArrowRight className="h-4 w-4" />
           </Link>
-          <Link href="/dashboard" className="button-secondary">Partner dashboard</Link>
         </div>
       </div>
 
