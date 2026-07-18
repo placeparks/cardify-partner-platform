@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { CheckCircle2, Code2, Copy, Eye, ShieldCheck } from "lucide-react"
+import RevenueCalculator from "@/components/revenue-calculator"
 
 export default function HomePage() {
   return (
@@ -145,6 +146,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <RevenueCalculator />
 
       <section className="px-4 py-24 text-center">
         <h2 className="mb-4 font-sora text-5xl font-extrabold text-[#f4fff3]">Ready to sell custom printed cards?</h2>
