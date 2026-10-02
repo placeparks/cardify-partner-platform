@@ -1,6 +1,7 @@
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { makePartnerKey, sendDecisionEmail } from "@/lib/partnership"
 import { ApiError } from "@/lib/manufacturing-contract"
+import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
 export const reviewFields = "id,email,full_name,business_name,website_url,audience,proposed_percentage,approved_percentage,status,admin_notes,reviewed_by,reviewed_at,created_at,updated_at,api_blocked_at"
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
@@ -34,7 +35,7 @@ export async function reviewPartnership(id: string, body: any, reviewerEmail: st
     throw new ApiError(409, "partner_blocked", "This partner is blocked. Resolve the enforcement hold before approval.")
   }
   let percentage: number | null = null
-  if (body.status === "approved") {
+  if (PARTNER_REVENUE_SHARING_ENABLED && body.status === "approved") {
     const value = body.approvedPercentage ?? current.proposed_percentage
     if ((typeof value !== "number" && typeof value !== "string") || String(value).trim() === "") {
       throw new ApiError(400, "invalid_percentage", "Enter a percentage between 0 and 30.")
@@ -47,7 +48,8 @@ export async function reviewPartnership(id: string, body: any, reviewerEmail: st
   const now = new Date().toISOString()
   const { data, error } = await db.from("partnership_requests").update({
     status: body.status,
-    approved_percentage: percentage,
+    // Do not overwrite historical percentages while revenue sharing is paused.
+    ...(PARTNER_REVENUE_SHARING_ENABLED ? { approved_percentage: percentage } : {}),
     admin_notes: body.adminNotes?.trim() || null,
     reviewed_at: now,
     reviewed_by: reviewerEmail,
