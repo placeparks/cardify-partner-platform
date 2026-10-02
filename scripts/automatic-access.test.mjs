@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite'
 import ts from 'typescript'
 
 const migration = '20261004000000_partner_automatic_access.sql'
+const activationMigration = '20261005000000_activate_pending_partners.sql'
 test('automatic signup is idempotent, auditable, preserves data, and revocation stops keys/carts/production and resubmission', async () => {
   const db = new PGlite()
   try {
@@ -56,6 +57,51 @@ test('automatic signup is idempotent, auditable, preserves data, and revocation 
       assert.equal((await db.query("select has_function_privilege('authenticated',$1,'EXECUTE') ok",[signature])).rows[0].ok,false)
       assert.equal((await db.query("select has_function_privilege('service_role',$1,'EXECUTE') ok",[signature])).rows[0].ok,true)
     }
+  } finally { await db.close() }
+})
+
+test('upgrade activates existing submissions and legacy inserts, queues welcome emails, and preserves declined or enforced accounts', async () => {
+  const db = new PGlite()
+  try {
+    await db.exec(`create role anon;create role authenticated;create role service_role;
+      create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql as $$select null::uuid$$;
+      create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);`)
+    for (const file of ['20260716_create_partnership_platform.sql','20260716_add_stripe_connect_to_partnerships.sql','20261002_manufacturing_api.sql','20261002_manufacturing_enforcement.sql','20261003000000_customer_checkout_affiliates.sql',migration]) {
+      await db.exec((await readFile(new URL(`../supabase/migrations/${file}`,import.meta.url),'utf8')).replace('create extension if not exists "pgcrypto";',''))
+    }
+    const users = Array.from({length:7},(_,i)=>`00000000-0000-4000-a000-${String(i+101).padStart(12,'0')}`)
+    for (const uid of users) await db.query('insert into auth.users values($1)',[uid])
+    for (const [index,status,blocked,revoked] of [[0,'pending',false,false],[1,'declined',false,false],[2,'pending',true,false],[3,'pending',false,true],[4,'approved',false,false]]) {
+      await db.query(`insert into partnership_requests(user_id,email,business_name,website_url,status,proposed_percentage,approved_percentage,api_blocked_at,access_revoked_at)
+        values($1,'shop@example.com','Saved shop','https://shop.example',$2,9,4,$3,$4)`,[users[index],status,blocked?new Date():null,revoked?new Date():null])
+    }
+    const upgrade = await readFile(new URL(`../supabase/migrations/${activationMigration}`,import.meta.url),'utf8')
+    await db.exec(upgrade); await db.exec(upgrade)
+    const row = async uid => (await db.query('select * from partnership_requests where user_id=$1',[uid])).rows[0]
+    const active = await row(users[0])
+    assert.equal(active.status,'approved');assert.ok(active.auto_approved_at);assert.ok(active.welcome_email_next_attempt_at)
+    assert.equal(active.terms_accepted_at,null);assert.equal(Number(active.proposed_percentage),9);assert.equal(Number(active.approved_percentage),4)
+    assert.equal((await row(users[1])).status,'declined')
+    for (const uid of [users[1],users[2],users[3]]) {
+      const preserved = await row(uid)
+      assert.equal(preserved.auto_approved_at,null);assert.equal(preserved.welcome_email_next_attempt_at,null)
+    }
+    assert.equal((await row(users[4])).auto_approved_at,null)
+    assert.equal((await db.query("select count(*)::int n from partner_audit_events where action='automatically_approved'")).rows[0].n,1)
+    assert.equal((await db.query('select * from partner_claim_welcome_email($1)',[active.id])).rows.length,1)
+
+    // A previous server build can still send pending; the stored result is active.
+    await db.query("insert into partnership_requests(user_id,email,business_name,website_url,status) values($1,'legacy@example.com','Legacy submit','https://legacy.example','pending')",[users[5]])
+    const legacy = await row(users[5])
+    assert.equal(legacy.status,'approved');assert.ok(legacy.welcome_email_next_attempt_at)
+    const normal = (await db.query("select partner_register($1,'new@example.com','Owner','New shop','https://new.example',null) result",[users[6]])).rows[0].result.partner
+    assert.equal(normal.status,'approved')
+    for (const partner of [legacy,normal]) {
+      assert.equal((await db.query("select count(*)::int n from partner_audit_events where partner_id=$1 and action='automatically_approved'",[partner.id])).rows[0].n,1)
+    }
+    assert.equal((await db.query("select count(*)::int n from pg_policies where tablename='partnership_requests' and cmd in ('INSERT','UPDATE')")).rows[0].n,0)
+    await db.query("select partner_revoke_access($1,$2,'Suspicious activity','admin@example.com')",[legacy.id,legacy.updated_at])
+    assert.equal((await db.query("select partner_register($1,'legacy@example.com','Owner','Shop','https://legacy.example',null) result",[users[5]])).rows[0].result.blocked,true)
   } finally { await db.close() }
 })
 
