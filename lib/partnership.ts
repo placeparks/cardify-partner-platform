@@ -1,5 +1,5 @@
 import { cookies } from "next/headers"
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { createSign } from "crypto"
 
@@ -32,7 +32,10 @@ const DEFAULT_ADMIN_EMAILS = [
 ]
 
 export async function getSignedInUser() {
-  const supabase = createRouteHandlerClient({ cookies })
+  const store = await cookies()
+  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    cookies: { getAll: () => store.getAll(), setAll: (values: {name:string;value:string;options:CookieOptions}[]) => { values.forEach(({name,value,options}) => store.set(name,value,options)) } },
+  })
   const { data: { user }, error } = await supabase.auth.getUser()
   return { supabase, user: error ? null : user }
 }
@@ -205,9 +208,9 @@ async function sendGmailMessage(input: { to: string; subject: string; text: stri
     }
   }
 
-  const senderEmail = process.env.GMAIL_SENDER_EMAIL || "partners@cardify.club"
+  const senderEmail = process.env.GMAIL_SENDER_EMAIL || "partners@tcgplaytest.com"
   const raw = [
-    `From: "Cardify Partnerships" <${senderEmail}>`,
+    `From: "TCGPlaytest Partnerships" <${senderEmail}>`,
     `To: ${input.to}`,
     `Subject: ${input.subject}`,
     "Content-Type: text/plain; charset=UTF-8",
@@ -235,10 +238,10 @@ async function sendGmailMessage(input: { to: string; subject: string; text: stri
 
 export async function sendDecisionEmail(request: PartnershipRequest) {
   const approved = request.status === "approved"
-  const subject = approved ? "Your Cardify partnership is approved" : "Cardify partnership update"
+  const subject = approved ? "Your TCGPlaytest partnership is approved" : "TCGPlaytest partnership update"
   const text = approved
-    ? `Hi ${request.full_name || request.business_name},\n\nYour Cardify partnership is approved at ${request.approved_percentage ?? request.proposed_percentage}%.\n\nNext step: sign in to your Cardify dashboard and complete Stripe Connect onboarding. Once Stripe confirms the connected account, your dashboard will show the widget code for your shop.\n\nCardify`
-    : `Hi ${request.full_name || request.business_name},\n\nThanks for applying to become a Cardify partner. We are not able to approve this application right now.\n\n${request.admin_notes ? `Notes: ${request.admin_notes}\n\n` : ""}Cardify`
+    ? `Hi ${request.full_name || request.business_name},\n\nYour TCGPlaytest partnership is approved at ${request.approved_percentage ?? request.proposed_percentage}%.\n\nSign in to your TCGPlaytest dashboard, accept the manufacturing API terms, link your affiliate code, and create your test and live REST API keys. Cart handoff does not require Stripe Connect.\n\nTCGPlaytest`
+    : `Hi ${request.full_name || request.business_name},\n\nThanks for applying to become a TCGPlaytest partner. We are not able to approve this application right now.\n\n${request.admin_notes ? `Notes: ${request.admin_notes}\n\n` : ""}TCGPlaytest`
 
   return sendGmailMessage({ to: request.email, subject, text })
 }
@@ -249,9 +252,9 @@ export async function sendWidgetReadyEmail(request: PartnershipRequest) {
   }
 
   const widgetCode = makeWidgetSnippet(request.widget_partner_key, request.approved_percentage ?? request.proposed_percentage)
-  const dashboardUrl = (process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL || "https://cardify-partner-platform.vercel.app").replace(/\/$/, "")
-  const subject = "Your Cardify widget is ready"
-  const text = `Hi ${request.full_name || request.business_name},\n\nYour Stripe Connect onboarding is complete and your Cardify widget is ready.\n\nAdd this code to your shop:\n\n${widgetCode}\n\nYou can also sign in to your dashboard to copy the latest code and track orders:\n${dashboardUrl}/dashboard\n\nCardify`
+  const dashboardUrl = (process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL || process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL || "https://partners.tcgplaytest.com").replace(/\/$/, "")
+  const subject = "Your TCGPlaytest widget is ready"
+  const text = `Hi ${request.full_name || request.business_name},\n\nYour Stripe Connect onboarding is complete and your TCGPlaytest widget is ready.\n\nAdd this code to your shop:\n\n${widgetCode}\n\nYou can also sign in to your dashboard to copy the latest code and track orders:\n${dashboardUrl}/dashboard\n\nTCGPlaytest`
 
   return sendGmailMessage({ to: request.email, subject, text })
 }
