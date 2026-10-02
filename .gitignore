@@ -51,3 +51,6 @@ app/api/webhook/route.ts
 next.config.js
 package-lock.json
 package.json
+!next.config.js
+!package-lock.json
+!package.json
