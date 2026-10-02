@@ -1,14 +1,14 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { getSignedInUser } from "@/lib/partnership"
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const code = url.searchParams.get("code")
-  const next = url.searchParams.get("next") || "/dashboard"
+  const candidate = url.searchParams.get("next") || "/dashboard"
+  const next = candidate.startsWith("/") && !candidate.startsWith("//") && !candidate.includes("\\") ? candidate : "/dashboard"
 
   if (code) {
-    const supabase = createRouteHandlerClient({ cookies })
+    const { supabase } = await getSignedInUser()
     await supabase.auth.exchangeCodeForSession(code)
   }
 
