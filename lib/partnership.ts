@@ -24,6 +24,7 @@ export type PartnershipRequest = {
   widget_email_sent_at: string | null
   created_at: string
   reviewed_at: string | null
+  api_blocked_at?: string | null
 }
 
 const DEFAULT_ADMIN_EMAILS = [
@@ -117,7 +118,7 @@ function getServiceAccountJson(): ServiceAccountJsonResult {
   }
 }
 
-async function getServiceAccountAccessToken(): Promise<TokenResult> {
+async function getServiceAccountAccessToken(signal?: AbortSignal): Promise<TokenResult> {
   const parsed = getServiceAccountJson()
   if ("error" in parsed) return { error: parsed.error }
 
@@ -147,6 +148,7 @@ async function getServiceAccountAccessToken(): Promise<TokenResult> {
   const assertion = `${unsigned}.${toBase64Url(signature)}`
 
   const response = await fetch(tokenUri, {
+    signal,
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -167,8 +169,8 @@ async function getServiceAccountAccessToken(): Promise<TokenResult> {
   return { accessToken: data.access_token as string }
 }
 
-async function getGmailAccessToken(): Promise<TokenResult> {
-  const serviceAccountToken = await getServiceAccountAccessToken()
+async function getGmailAccessToken(signal?: AbortSignal): Promise<TokenResult> {
+  const serviceAccountToken = await getServiceAccountAccessToken(signal)
   if ("accessToken" in serviceAccountToken) return serviceAccountToken
 
   const clientId = process.env.GMAIL_CLIENT_ID
@@ -177,6 +179,7 @@ async function getGmailAccessToken(): Promise<TokenResult> {
   if (!clientId || !clientSecret || !refreshToken) return { error: serviceAccountToken.error }
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
+    signal,
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -200,7 +203,8 @@ async function getGmailAccessToken(): Promise<TokenResult> {
 }
 
 async function sendGmailMessage(input: { to: string; subject: string; text: string }) {
-  const token = await getGmailAccessToken()
+  const signal = AbortSignal.timeout(12000)
+  const token = await getGmailAccessToken(signal)
   if ("error" in token) {
     return {
       sent: false,
@@ -219,6 +223,7 @@ async function sendGmailMessage(input: { to: string; subject: string; text: stri
   ].join("\r\n")
 
   const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    signal,
     method: "POST",
     headers: {
       Authorization: `Bearer ${token.accessToken}`,
@@ -247,14 +252,14 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
 }
 
 export async function sendWidgetReadyEmail(request: PartnershipRequest) {
-  if (!request.widget_partner_key) {
-    return { sent: false, reason: "Partner does not have a widget partner key yet." }
+  if (request.status !== "approved" || request.api_blocked_at) {
+    return { sent: false, reason: "Partner access is unavailable." }
   }
 
   const widgetCode = makeWidgetSnippet()
   const dashboardUrl = (process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL || process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL || "https://partners.tcgplaytest.com").replace(/\/$/, "")
-  const subject = "Your TCGPlaytest widget is ready"
-  const text = `Hi ${request.full_name || request.business_name},\n\nYour TCGPlaytest widget and REST API access are ready. No Stripe Connect account is required.\n\nConnect your server using the integration guide, then add this code to your shop:\n\n${widgetCode}\n\nSign in to your dashboard to create API keys and track orders:\n${dashboardUrl}/dashboard\n\nTCGPlaytest`
+  const subject = "Your TCGPlaytest widget and API access are ready"
+  const text = `Hi ${request.full_name || request.business_name},\n\nYour application is complete and your partner access is active immediately. No manual approval or Stripe Connect account is required.\n\nYOUR WIDGET\n${widgetCode}\n\nConnect the widget to POST /api/tcgplaytest/cart on your own server using this guide:\n${dashboardUrl}/docs#widget\n\nYOUR REST API\nBase URL: ${dashboardUrl}\nPOST /v1/carts - create a certified cart and checkout link\nGET /v1/carts/{id} - cart status\nGET /v1/orders/{id} - manufacturing and shipment status\n\nSign in to accept the manufacturing terms and generate your test and live secret API keys:\n${dashboardUrl}/dashboard\nKeys are displayed once in your dashboard. Store them on your server, never in the widget or browser.\n\nYou supply every front and back and certify content origin, reproduction rights, and manufacturing-only instructions on every order. TCGPlaytest temporarily processes those client-supplied files for printing and fulfillment. Automatic account access does not verify artwork rights. Access can be revoked for suspicious activity or infringement.\n\nTCGPlaytest`
 
   return sendGmailMessage({ to: request.email, subject, text })
 }
