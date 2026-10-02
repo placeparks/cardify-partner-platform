@@ -13,19 +13,36 @@
 html,
 body {
   max-width: 100%;
-  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   background: #05070d;
   color: white;
+  overflow-wrap: anywhere;
 }
 
 input,
 textarea,
 select {
   color-scheme: dark;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Keep long URLs, credentials and grid children inside their panels. */
+pre,
+.grid > *,
+.glass-panel,
+.glass-card {
+  min-width: 0;
+}
+
+pre { max-width: 100%; }
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #00d1ff;
+  outline-offset: 3px;
 }
 
 .field {
@@ -166,6 +183,25 @@ select {
 
 .button-secondary {
   @apply inline-flex items-center justify-center gap-2 border border-cyan/60 bg-transparent px-5 py-3 text-sm font-bold uppercase tracking-wider text-cyan transition hover:border-green hover:text-green disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.button-primary,
+.button-secondary {
+  min-height: 44px;
+  max-width: 100%;
+  text-align: center;
+}
+
+.button-primary svg,
+.button-secondary svg { flex-shrink: 0; }
+
+summary { min-height: 44px; cursor: pointer; }
+
+@media (max-width: 767px) {
+  /* Prevent mobile Safari from zooming when a form control receives focus. */
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select {
+    font-size: 16px;
+  }
 }
 
 /* Revenue calculator slider */
