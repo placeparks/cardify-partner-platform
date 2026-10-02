@@ -22,6 +22,7 @@ const replacements = { 'next/server': next, '@/lib/partnership': partnership, '@
 const { POST: onboard } = await import(await load('../app/api/stripe/connect/onboard/route.ts', replacements))
 const { GET: connectStatus } = await import(await load('../app/api/stripe/connect/status/route.ts', replacements))
 const { POST: apply } = await import(await load('../app/api/partnership/apply/route.ts', replacements))
+const { POST: retryWelcome } = await import(await load('../app/api/partnership/welcome/route.ts', replacements))
 const { partnerWidgetCode } = await import(await load('../lib/widget-access.ts'))
 
 test('approved partners receive a widget without saved Stripe details or a widget key; other statuses and holds are denied', () => {
@@ -56,6 +57,32 @@ test('signup uses verified identity, grants immediate access and queues a welcom
     assert.equal(globalThis.applicationTest.emailCalls.length, blocked ? 0 : 1)
     if (!blocked) { const data=await response.json();assert.equal(data.request.status,'approved');assert.equal(data.email.queued,true) }
   }
+})
+
+test('signup does not report success or send a welcome for an unconfirmed activation', async () => {
+  for (const partner of [{id:'partner1',status:'pending'},{id:'partner1',status:'approved',api_blocked_at:'now'}]) {
+    globalThis.applicationTest={user:{id:'user1',email:'shop@example.com'},emailCalls:[],rpc:async()=>({data:{partner}})}
+    const result=await apply(new Request('https://partners.example/api/partnership/apply',{method:'POST',body:JSON.stringify({businessName:'Shop',websiteUrl:'https://shop.example'})}))
+    assert.equal(result.status,503);assert.equal(globalThis.applicationTest.emailCalls.length,0)
+  }
+})
+
+test('welcome retry uses only the signed-in partner and refuses blocked accounts or duplicate sends', async () => {
+  for (const [partner,status,calls] of [[null,403,0],[{id:'own-partner',status:'pending'},403,0],
+    [{id:'own-partner',status:'approved',api_blocked_at:'now'},403,0],
+    [{id:'own-partner',status:'approved',welcome_email_sent_at:'now'},200,0],
+    [{id:'own-partner',status:'approved'},200,1]]) {
+    const filters=[]
+    globalThis.applicationTest={user:{id:'own-user'},emailCalls:[],from:table=>{
+      assert.equal(table,'partnership_requests')
+      const q={select:()=>q,eq:(...args)=>{filters.push(args);return q},maybeSingle:async()=>({data:partner})};return q
+    }}
+    assert.equal((await retryWelcome()).status,status)
+    assert.deepEqual(filters,[['user_id','own-user']]);assert.equal(globalThis.applicationTest.emailCalls.length,calls)
+    if(calls)assert.deepEqual(globalThis.applicationTest.emailCalls,['own-partner'])
+  }
+  globalThis.applicationTest={user:null,emailCalls:[]}
+  assert.equal((await retryWelcome()).status,401)
 })
 
 const widgetSource = await readFile(new URL('../public/partner-widget/widget.js', import.meta.url), 'utf8')
