@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { BarChart3, CheckCircle2, Code2, LogIn, Rocket, ShieldCheck } from "lucide-react"
+import { PackageCheck, CheckCircle2, Code2, LogIn, Rocket, ShieldCheck } from "lucide-react"
 import { getSupabaseBrowserClient, signInWithGoogle } from "@/lib/supabase-browser"
 import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
@@ -72,6 +72,7 @@ export default function PartnershipPage() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Could not submit application")
+      if (data.request?.status !== "approved") throw new Error("Your access could not be activated. Please contact TCGPlaytest.")
       setEmailSent(Boolean(data.email?.sent))
       setSubmitted(true)
     } catch (error) {
@@ -108,13 +109,13 @@ export default function PartnershipPage() {
             Connect to TCGPlaytest <span className="text-[#00d1ff]">from your server</span>
           </h1>
           <p className="mt-5 max-w-md text-lg leading-8 text-[#b9cbbc]">
-            Sign in and submit your store details to get immediate widget and REST API access. No manual approval or Stripe Connect account is required. You remain responsible for submitted artwork and reproduction rights.
+            Sign in and submit your store details to get immediate widget and REST API access. You supply the artwork and confirm reproduction rights; we handle printing and fulfillment.
           </p>
 
           <div className="mt-8 space-y-4">
             {[
               { icon: Rocket, title: "Partner checkout", body: "Your server sends client-supplied artwork instructions; customers pay at TCGPlaytest." },
-              { icon: BarChart3, title: "Customer affiliate discounts", body: "Customers can enter an optional affiliate code at checkout using the existing TCGPlaytest rules." },
+              { icon: PackageCheck, title: "Print and fulfillment", body: "We print your submitted artwork and ship the finished order to your customer." },
               { icon: Code2, title: "Widget and REST API access", body: "After submitting, copy your widget, accept the manufacturing terms, and generate server-side API keys." },
             ].map((item) => (
               <div key={item.title} className="flex items-start gap-4">
