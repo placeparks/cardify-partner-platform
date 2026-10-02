@@ -1,11 +1,17 @@
 "use client"
 
 import { FormEvent, useEffect, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { BarChart3, CheckCircle2, Code2, LogIn, Rocket, ShieldCheck } from "lucide-react"
 import { getSupabaseBrowserClient, signInWithGoogle } from "@/lib/supabase-browser"
+import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
 export default function PartnershipPage() {
+  const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [checkingApplication, setCheckingApplication] = useState(true)
+  const [applicationError, setApplicationError] = useState("")
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState("")
   const [submitted, setSubmitted] = useState(false)
@@ -14,19 +20,42 @@ export default function PartnershipPage() {
     businessName: "",
     websiteUrl: "",
     audience: "",
-    proposedPercentage: "2",
+    proposedPercentage: "0",
   })
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient()
-    supabase.auth.getUser().then(({ data }) => {
+    let active = true
+    async function checkApplication() {
+      const supabase = getSupabaseBrowserClient()
+      const { data } = await supabase.auth.getUser()
+      if (!active) return
+      if (data.user) {
+        const { data: existing, error } = await supabase
+          .from("partnership_requests")
+          .select("id")
+          .eq("user_id", data.user.id)
+          .maybeSingle()
+        if (!active) return
+        if (error) throw new Error("Could not check your application. Please try again.")
+        if (existing) {
+          router.replace("/dashboard")
+          return
+        }
+      }
       setUser(data.user ?? null)
       setForm((current) => ({
         ...current,
         fullName: data.user?.user_metadata?.full_name || "",
       }))
+      setCheckingApplication(false)
+    }
+    checkApplication().catch(() => {
+      if (!active) return
+      setApplicationError("Could not check your application. Please try again.")
+      setCheckingApplication(false)
     })
-  }, [])
+    return () => { active = false }
+  }, [router])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -37,7 +66,7 @@ export default function PartnershipPage() {
       const response = await fetch("/api/partnership/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, proposedPercentage: PARTNER_REVENUE_SHARING_ENABLED ? form.proposedPercentage : undefined }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Could not submit application")
@@ -48,6 +77,15 @@ export default function PartnershipPage() {
       setBusy(false)
     }
   }
+
+  if (checkingApplication) return <main className="mx-auto max-w-6xl p-10" role="status">Checking your partnership…</main>
+  if (applicationError) return (
+    <main className="mx-auto max-w-xl space-y-5 p-10">
+      <p role="alert">{applicationError}</p>
+      <button className="button-primary" onClick={() => window.location.reload()}>Try again</button>
+      <Link className="ml-4 text-cyan-300" href="/dashboard">Open dashboard</Link>
+    </main>
+  )
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#020617] px-4 py-16 text-[#dce1fb] md:px-6">
@@ -64,17 +102,17 @@ export default function PartnershipPage() {
           </div>
 
           <h1 className="font-sora text-4xl font-extrabold leading-tight text-[#dce1fb] md:text-5xl">
-            Get your Cardify widget <span className="text-[#00d1ff]">for your store</span>
+            Connect to TCGPlaytest <span className="text-[#00d1ff]">from your server</span>
           </h1>
           <p className="mt-5 max-w-md text-lg leading-8 text-[#b9cbbc]">
-            Sign in with Google first - it links your application to your partner account so you can track its status. Approved partners unlock the Cardify widget, Stripe payouts, and live order tracking.
+            Sign in with Google first - it links your application to your partner account so you can track its status. Approved partners receive widget code, test and live REST API access, and manufacturing order tracking. No Stripe Connect account is required.
           </p>
 
           <div className="mt-8 space-y-4">
             {[
-              { icon: Rocket, title: "Partner checkout", body: "Customers upload artwork and pay without leaving your site." },
-              { icon: BarChart3, title: "Revenue tracking", body: "Your dashboard shows orders, gross revenue, and your earnings in real time." },
-              { icon: Code2, title: "Widget delivery", body: "Once approved and set up with Stripe, your embed code is in your dashboard and inbox." },
+              { icon: Rocket, title: "Partner checkout", body: "Your server sends client-supplied artwork instructions; customers pay at TCGPlaytest." },
+              { icon: BarChart3, title: "Customer affiliate discounts", body: "Customers can enter an optional affiliate code at checkout using the existing TCGPlaytest rules." },
+              { icon: Code2, title: "Widget and REST API access", body: "After approval, copy your widget, accept the manufacturing terms, and generate server-side API keys." },
             ].map((item) => (
               <div key={item.title} className="flex items-start gap-4">
                 <div className="glass-panel flex h-12 w-12 items-center justify-center text-[#00d1ff] transition group-hover:scale-110">
@@ -89,9 +127,9 @@ export default function PartnershipPage() {
           </div>
 
           <div className="glass-panel mt-10 hidden max-w-xs rotate-[-6deg] overflow-hidden rounded-xl p-3 opacity-80 lg:block">
-            <img src="/partnership.png" alt="Cardify partnership application preview" className="aspect-[3/4] w-full rounded-lg object-cover" />
+            <img src="/partnership.png" alt="TCGPlaytest partnership application preview" className="aspect-[3/4] w-full rounded-lg object-cover" />
             <div className="mt-3 h-1 w-full bg-[#00d1ff]" />
-            <p className="mt-2 font-mono text-[10px] uppercase tracking-widest text-[#00d1ff]">Cardify partner access</p>
+            <p className="mt-2 font-mono text-[10px] uppercase tracking-widest text-[#00d1ff]">TCGPlaytest partner access</p>
           </div>
         </div>
 
@@ -101,7 +139,7 @@ export default function PartnershipPage() {
             <div className="relative z-10">
               <div className="mb-8 flex items-center justify-between gap-4">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#00d1ff]">Cardify access</p>
+                  <p className="font-mono text-xs uppercase tracking-[0.22em] text-[#00d1ff]">TCGPlaytest access</p>
                   <h2 className="mt-2 font-sora text-3xl font-bold text-[#f4fff3]">Application</h2>
                 </div>
                 <div className="flex">
@@ -158,14 +196,14 @@ export default function PartnershipPage() {
                     <input className="input-recessed w-full p-4 font-mono text-sm text-[#dce1fb]" required type="url" placeholder="https://yourwebsite.com" value={form.websiteUrl} onChange={(event) => setForm({ ...form, websiteUrl: event.target.value })} />
                   </label>
 
-                  <label className="grid gap-2">
-                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Proposed revenue share (%)</span>
+                  {PARTNER_REVENUE_SHARING_ENABLED && <label className="grid gap-2">
+                    <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Optional resale-widget revenue share (%)</span>
                     <div className="flex items-center gap-3">
                       <input className="input-recessed w-full p-4 font-mono text-sm text-[#dce1fb]" required min="0" max="30" step="0.1" type="number" value={form.proposedPercentage} onChange={(event) => setForm({ ...form, proposedPercentage: event.target.value })} />
                       <span className="border border-[#00d1ff]/20 bg-[#070d1f]/80 px-4 py-4 font-mono text-sm text-[#00d1ff]">%</span>
                     </div>
-                    <span className="text-xs leading-5 text-[#b9cbbc]">The percentage of each sale you'd like to keep. We'll confirm the split during review.</span>
-                  </label>
+                    <span className="text-xs leading-5 text-[#b9cbbc]">Applies only to the optional resale widget. API handoff uses standard TCGPlaytest prices and affiliate rewards.</span>
+                  </label>}
 
                   <label className="grid gap-2">
                     <span className="font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">Tell us about your audience</span>
