@@ -1,11 +1,13 @@
 "use client"
 
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { LayoutDashboard, LogIn, LogOut, ShieldCheck } from "lucide-react"
+import { LayoutDashboard, LogIn, LogOut } from "lucide-react"
 import { getSupabaseBrowserClient, signInWithGoogle, signOut } from "@/lib/supabase-browser"
 
 export function Navigation() {
+  const pathname = usePathname()
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [canSeeDashboard, setCanSeeDashboard] = useState(false)
   const [canSeeAdmin, setCanSeeAdmin] = useState(false)
@@ -26,7 +28,7 @@ export function Navigation() {
       refreshNavAccess()
     })
     return () => data.subscription.unsubscribe()
-  }, [])
+  }, [pathname])
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#0f172a]/70 px-5 py-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
@@ -47,12 +49,13 @@ export function Navigation() {
               Dashboard
             </Link>
           )}
+          {/* Partnership administration lives in the testing dashboard.
           {canSeeAdmin && (
             <Link href="/admin" className="hidden border border-cyan/25 bg-white/[0.03] px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
               <ShieldCheck className="h-4 w-4" />
               Admin
             </Link>
-          )}
+          )} */}
           {userEmail ? (
             <button onClick={signOut} className="button-secondary px-3 py-2">
               <LogOut className="h-4 w-4" />
