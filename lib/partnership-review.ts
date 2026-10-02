@@ -6,6 +6,18 @@ import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 export const reviewFields = "id,email,full_name,business_name,website_url,audience,proposed_percentage,approved_percentage,status,admin_notes,reviewed_by,reviewed_at,created_at,updated_at,api_blocked_at,api_block_reason,auto_approved_at,access_revoked_at,access_revoked_by,welcome_email_sent_at,welcome_email_next_attempt_at,welcome_email_attempts,welcome_email_last_error"
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 
+async function countPartnerOrders(partnerId?: string): Promise<number | null> {
+  // Both integrations create manufacturing orders only after payment. Count
+  // records, not carts/cards/events, including orders later cancelled or held.
+  // Head/count avoids Supabase's row limit and never loads customer or artwork data.
+  try {
+    let query = db.from("partner_manufacturing_orders").select("id", { count: "exact", head: true }).eq("mode", "live")
+    if (partnerId) query = query.eq("partner_id", partnerId)
+    const { count, error } = await query
+    return error || count === null ? null : count
+  } catch { return null }
+}
+
 export async function listPartnershipRequests(status: string, page: number) {
   if (!["all", "pending", "approved", "declined", "revoked"].includes(status) || !Number.isInteger(page) || page < 1 || page > 10000) {
     throw new ApiError(400, "invalid_request", "Choose a valid status and page.")
@@ -16,7 +28,15 @@ export async function listPartnershipRequests(status: string, page: number) {
   else if (status !== "all") query = query.eq("status", status).is("api_blocked_at", null)
   const { data, count, error } = await query.order("created_at", { ascending: false }).order("id").range((page - 1) * pageSize, page * pageSize - 1)
   if (error) throw new ApiError(500, "database_error", "Could not load partnership requests.")
-  return { requests: data || [], total: count || 0, page, pageSize }
+  const requests = data || []
+  const [totalOrders, ...partnerCounts] = await Promise.all([
+    countPartnerOrders(), ...requests.map(request => countPartnerOrders(request.id)),
+  ])
+  return {
+    requests: requests.map((request, index) => ({ ...request, order_count: partnerCounts[index] })),
+    total: count || 0, page, pageSize, totalOrders,
+    orderCountsUnavailable: totalOrders === null || partnerCounts.some(value => value === null),
+  }
 }
 
 export async function revokePartnership(id: string, body: any, reviewer: string) {
