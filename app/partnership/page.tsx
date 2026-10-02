@@ -15,6 +15,7 @@ export default function PartnershipPage() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState("")
   const [submitted, setSubmitted] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
   const [form, setForm] = useState({
     fullName: "",
     businessName: "",
@@ -32,15 +33,16 @@ export default function PartnershipPage() {
       if (data.user) {
         const { data: existing, error } = await supabase
           .from("partnership_requests")
-          .select("id")
+          .select("id,status,full_name,business_name,website_url,audience")
           .eq("user_id", data.user.id)
           .maybeSingle()
         if (!active) return
         if (error) throw new Error("Could not check your application. Please try again.")
-        if (existing) {
+        if (existing && existing.status !== "pending") {
           router.replace("/dashboard")
           return
         }
+        if (existing) setForm(current => ({ ...current, businessName: existing.business_name, websiteUrl: existing.website_url, audience: existing.audience || "" }))
       }
       setUser(data.user ?? null)
       setForm((current) => ({
@@ -70,6 +72,7 @@ export default function PartnershipPage() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Could not submit application")
+      setEmailSent(Boolean(data.email?.sent))
       setSubmitted(true)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not submit application")
@@ -105,14 +108,14 @@ export default function PartnershipPage() {
             Connect to TCGPlaytest <span className="text-[#00d1ff]">from your server</span>
           </h1>
           <p className="mt-5 max-w-md text-lg leading-8 text-[#b9cbbc]">
-            Sign in with Google first - it links your application to your partner account so you can track its status. Approved partners receive widget code, test and live REST API access, and manufacturing order tracking. No Stripe Connect account is required.
+            Sign in and submit your store details to get immediate widget and REST API access. No manual approval or Stripe Connect account is required. You remain responsible for submitted artwork and reproduction rights.
           </p>
 
           <div className="mt-8 space-y-4">
             {[
               { icon: Rocket, title: "Partner checkout", body: "Your server sends client-supplied artwork instructions; customers pay at TCGPlaytest." },
               { icon: BarChart3, title: "Customer affiliate discounts", body: "Customers can enter an optional affiliate code at checkout using the existing TCGPlaytest rules." },
-              { icon: Code2, title: "Widget and REST API access", body: "After approval, copy your widget, accept the manufacturing terms, and generate server-side API keys." },
+              { icon: Code2, title: "Widget and REST API access", body: "After submitting, copy your widget, accept the manufacturing terms, and generate server-side API keys." },
             ].map((item) => (
               <div key={item.title} className="flex items-start gap-4">
                 <div className="glass-panel flex h-12 w-12 items-center justify-center text-[#00d1ff] transition group-hover:scale-110">
@@ -153,10 +156,11 @@ export default function PartnershipPage() {
               {submitted ? (
                 <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
                   <CheckCircle2 className="h-14 w-14 text-[#00ff9d]" />
-                  <h2 className="mt-5 font-sora text-3xl font-black text-[#f4fff3]">Submitted</h2>
+                  <h2 className="mt-5 font-sora text-3xl font-black text-[#f4fff3]">Your partner access is ready</h2>
                   <p className="mt-3 max-w-md text-sm leading-6 text-[#b9cbbc]">
-                    Your partnership application has been received. We will review it and email you once there is an update.
+                    {emailSent ? "We sent your widget code and API setup guide to your sign-in email." : "Your welcome email is queued for delivery. You can use the dashboard immediately."}
                   </p>
+                  <Link href="/dashboard" className="button-primary mt-6">Open widget and API dashboard</Link>
                 </div>
               ) : (
                 <form onSubmit={submit} className="space-y-6">
@@ -216,7 +220,7 @@ export default function PartnershipPage() {
                     <span className="relative z-10">{busy ? "Submitting..." : "Submit application"}</span>
                     <span className="absolute inset-0 -translate-x-full skew-x-12 bg-white/20 transition-transform duration-700 group-hover:translate-x-full" />
                   </button>
-                  <p className="text-center font-mono text-xs uppercase tracking-wider text-[#b9cbbc]/60">We review most applications within 2 business days. You'll hear from us by email.</p>
+                  <p className="text-center text-xs leading-6 text-[#b9cbbc]">Access activates immediately. We email your widget and API setup guide. TCGPlaytest may revoke access for suspicious activity or infringement.</p>
                 </form>
               )}
               
