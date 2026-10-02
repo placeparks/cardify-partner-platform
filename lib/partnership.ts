@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { createSign } from "crypto"
+import { widgetSnippet } from "@/lib/widget-access"
 
 export type PartnershipStatus = "pending" | "approved" | "declined"
 
@@ -66,10 +67,9 @@ export function makePartnerKey() {
   return `partner_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`
 }
 
-export function makeWidgetSnippet(partnerKey: string, approvedPercentage: number | string | null = 2) {
-  const origin = process.env.NEXT_PUBLIC_TCGPLAYTEST_WIDGET_ORIGIN || "https://testing123-prof.vercel.app"
-  const partnerShareBps = Math.round(Number(approvedPercentage || 2) * 100)
-  return `<script src="${origin}/partner-widget/widget.js" data-partner-key="${partnerKey}" data-product-name="Premium custom card printing" data-partner-share-bps="${partnerShareBps}" data-accent="#16a34a" async></script>`
+export function makeWidgetSnippet() {
+  const origin = process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL || process.env.NEXT_PUBLIC_CARDIFY_APP_URL || "https://partners.tcgplaytest.com"
+  return widgetSnippet(origin, process.env.TCGPLAYTEST_CHECKOUT_ORIGIN || "https://www.tcgplaytest.com")
 }
 
 function toBase64Url(input: string | Buffer) {
@@ -240,7 +240,7 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
   const approved = request.status === "approved"
   const subject = approved ? "Your TCGPlaytest partnership is approved" : "TCGPlaytest partnership update"
   const text = approved
-    ? `Hi ${request.full_name || request.business_name},\n\nYour TCGPlaytest partnership is approved at ${request.approved_percentage ?? request.proposed_percentage}%.\n\nSign in to your TCGPlaytest dashboard, accept the manufacturing API terms, link your affiliate code, and create your test and live REST API keys. Cart handoff does not require Stripe Connect.\n\nTCGPlaytest`
+    ? `Hi ${request.full_name || request.business_name},\n\nYour TCGPlaytest partnership is approved.\n\nSign in to your TCGPlaytest dashboard to copy your widget code, accept the manufacturing API terms, and create your test and live REST API keys. Connect the widget to your server using the integration guide. No Stripe Connect account is required.\n\nTCGPlaytest`
     : `Hi ${request.full_name || request.business_name},\n\nThanks for applying to become a TCGPlaytest partner. We are not able to approve this application right now.\n\n${request.admin_notes ? `Notes: ${request.admin_notes}\n\n` : ""}TCGPlaytest`
 
   return sendGmailMessage({ to: request.email, subject, text })
@@ -251,10 +251,10 @@ export async function sendWidgetReadyEmail(request: PartnershipRequest) {
     return { sent: false, reason: "Partner does not have a widget partner key yet." }
   }
 
-  const widgetCode = makeWidgetSnippet(request.widget_partner_key, request.approved_percentage ?? request.proposed_percentage)
+  const widgetCode = makeWidgetSnippet()
   const dashboardUrl = (process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL || process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL || "https://partners.tcgplaytest.com").replace(/\/$/, "")
   const subject = "Your TCGPlaytest widget is ready"
-  const text = `Hi ${request.full_name || request.business_name},\n\nYour Stripe Connect onboarding is complete and your TCGPlaytest widget is ready.\n\nAdd this code to your shop:\n\n${widgetCode}\n\nYou can also sign in to your dashboard to copy the latest code and track orders:\n${dashboardUrl}/dashboard\n\nTCGPlaytest`
+  const text = `Hi ${request.full_name || request.business_name},\n\nYour TCGPlaytest widget and REST API access are ready. No Stripe Connect account is required.\n\nConnect your server using the integration guide, then add this code to your shop:\n\n${widgetCode}\n\nSign in to your dashboard to create API keys and track orders:\n${dashboardUrl}/dashboard\n\nTCGPlaytest`
 
   return sendGmailMessage({ to: request.email, subject, text })
 }
