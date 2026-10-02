@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
-import { getSignedInUser, makeWidgetSnippet } from "@/lib/partnership"
+import { getSignedInUser } from "@/lib/partnership"
+import { partnerWidgetCode } from "@/lib/widget-access"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 
-export async function GET() {
+export async function GET(request: Request) {
   const { user } = await getSignedInUser()
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 })
 
@@ -36,9 +37,7 @@ export async function GET() {
   return NextResponse.json({
     partner: {
       ...partner,
-      widgetCode: partner.widget_partner_key && partner.stripe_onboarding_complete
-        ? makeWidgetSnippet(partner.widget_partner_key, partner.approved_percentage ?? partner.proposed_percentage)
-        : null,
+      widgetCode: partnerWidgetCode(partner, new URL(request.url).origin, process.env.TCGPLAYTEST_CHECKOUT_ORIGIN || "https://www.tcgplaytest.com"),
     },
     metrics,
     apiKeys: keys.data,
