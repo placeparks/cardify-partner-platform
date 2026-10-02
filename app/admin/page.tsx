@@ -21,17 +21,19 @@ export default function AdminPage() {
     load()
   }, [])
 
-  async function decide(id: string, status: "approved" | "declined", approvedPercentage?: number, adminNotes?: string) {
+  async function decide(id: string, status: "approved" | "declined" | "revoked", approvedPercentage?: number, adminNotes?: string) {
     setSavingId(id)
     setNotice("")
     const response = await fetch(`/api/admin/partnerships/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, ...(PARTNER_REVENUE_SHARING_ENABLED ? { approvedPercentage } : {}), adminNotes }),
+      body: JSON.stringify(status === "revoked" ? { action: "revoke", reason: adminNotes, expectedUpdatedAt: state.requests.find((item:any)=>item.id===id)?.updated_at } : { status, ...(PARTNER_REVENUE_SHARING_ENABLED ? { approvedPercentage } : {}), adminNotes }),
     })
     const data = await response.json()
     if (!response.ok) {
       setNotice(data.error || "Could not update partnership request.")
+    } else if (data.revoked) {
+      setNotice("Access revoked. Keys, open carts, and unshipped manufacturing work are blocked.")
     } else if (data.email?.sent) {
       setNotice(`${status === "approved" ? "Approved" : "Declined"} and email sent.`)
     } else {
@@ -102,7 +104,7 @@ export default function AdminPage() {
         <header className="mb-8">
           <h1 className="text-4xl font-black text-[#f4fff3]">Admin Review Panel</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#b9cbbc]">
-            Manage partnership requests, review submitted shop details, and approve widget and REST API access.
+            New applications activate automatically. Review submitted shop details and revoke widget and REST API access when necessary.
           </p>
         </header>
 
@@ -151,8 +153,8 @@ export default function AdminPage() {
             <div className="glass-panel p-5">
               <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Current actions</p>
               <div className="mt-4 space-y-3 text-sm leading-6 text-[#b9cbbc]">
-                <p>Approve partners after checking their submitted shop details.</p>
-                <p>Approved partners receive widget code and REST API access without Stripe Connect.</p>
+                <p>New applications receive widget code and REST API access immediately.</p>
+                <p>Review activity and revoke access when necessary. No Stripe Connect account is required.</p>
               </div>
             </div>
           </aside>
@@ -338,8 +340,10 @@ function RequestCard({ request, saving, onDecide, compact = false }: { request: 
       </div>
 
       {isApproved ? (
-        <DecisionPanel icon={CheckCircle2} title="Approved" tone="green">
-          <p>This partner can access the dashboard, widget code, and REST API.</p>
+        <DecisionPanel icon={request.api_blocked_at ? XCircle : CheckCircle2} title={request.api_blocked_at ? "Access revoked" : "Approved"} tone={request.api_blocked_at ? "pink" : "green"}>
+          <p>{request.api_blocked_at ? request.api_block_reason || "Widget and API access are blocked." : "This partner can access the dashboard, widget code, and REST API."}</p>
+          {request.auto_approved_at && <p className="mt-2">Automatically approved on signup.</p>}
+          {!request.api_blocked_at && <div className="mt-4 space-y-3"><label className="block">Reason for revoking access<textarea className="field mt-2" maxLength={2000} value={notes} onChange={event=>setNotes(event.target.value)} /></label><p>Holds open carts and unshipped work. Stop physical production and review refunds separately.</p><button className="button-secondary" disabled={saving || notes.trim().length < 3} onClick={()=>onDecide(request.id,"revoked",undefined,notes)}>Revoke access</button></div>}
           {PARTNER_REVENUE_SHARING_ENABLED && <div className="mt-4 border border-[#00ff9d]/20 bg-[#020617]/70 p-3">
             <p className="text-xs uppercase tracking-wider text-[#b9cbbc]">Approved percentage</p>
             <p className="mt-1 text-2xl font-black text-[#00ff9d]">{request.approved_percentage ?? request.proposed_percentage}%</p>
