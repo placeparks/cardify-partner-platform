@@ -48,7 +48,7 @@ export function AffiliatePreference({ disabled, onChange, onPending }: {
     {!offer && !error && <p role="status">Checking your affiliate account…</p>}
     {offer?.approved && <>
       <p>Automatically apply your affiliate code <strong>{offer.code}</strong> to API and widget checkouts?</p>
-      <div className="flex gap-6">{[true, false].map(choice => <label key={String(choice)} className="flex items-center gap-2">
+      <div className="flex flex-wrap gap-3">{[true, false].map(choice => <label key={String(choice)} className="flex min-h-11 cursor-pointer items-center gap-3 rounded border border-white/20 px-4">
         <input type="radio" name="checkout-affiliate" checked={enabled === choice} disabled={disabled || saving}
           onChange={() => { setEnabled(choice); onChange(choice); setMessage("") }} />
         {choice ? "Yes" : "No"}
