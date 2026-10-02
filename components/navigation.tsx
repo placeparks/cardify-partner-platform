@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { LayoutDashboard, LogIn, LogOut } from "lucide-react"
@@ -32,12 +33,13 @@ export function Navigation() {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#0f172a]/70 px-5 py-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-        <Link href="/" className="text-xl font-black tracking-[0.22em] text-[#00ff9d] drop-shadow-[0_0_14px_rgba(0,255,157,0.55)]">
-          TCGPlaytest
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
+        <Link href="/" aria-label="TCGPlaytest home" className="flex shrink-0 items-center gap-3 text-xl font-bold text-white">
+          <Image src="/logo-word.svg" alt="" width={78} height={48} className="h-10 w-auto object-contain sm:h-12" priority />
+          <span>TCGPlaytest</span>
         </Link>
 
-        <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider">
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs uppercase tracking-wider">
           <Link href="/docs" className="px-3 py-2 text-cyan">API docs</Link>
           {canSeeAdmin && <Link href="/admin/manufacturing" className="px-3 py-2 text-cyan">Operations</Link>}
           <Link href="/partnership" className="hidden border border-cyan/25 bg-white/[0.03] px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
