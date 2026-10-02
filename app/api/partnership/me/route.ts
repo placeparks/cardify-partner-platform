@@ -15,6 +15,13 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!partner) return NextResponse.json({ partner: null })
 
+  const [keys, carts, manufacturingOrders] = await Promise.all([
+    supabaseAdmin.from("partner_api_keys").select("mode,key_prefix,created_at").eq("partner_id",partner.id).is("revoked_at",null),
+    supabaseAdmin.from("partner_carts").select("id",{count:"exact",head:true}).eq("partner_id",partner.id),
+    supabaseAdmin.from("partner_manufacturing_orders").select("id",{count:"exact",head:true}).eq("partner_id",partner.id),
+  ])
+  if (keys.error || carts.error || manufacturingOrders.error) return NextResponse.json({error:"Manufacturing API setup is incomplete. Apply the database migrations."},{status:503})
+
   const { data: orders } = await supabaseAdmin
     .from("partner_affiliate_orders")
     .select("retail_total_cents, partner_share_cents")
@@ -34,5 +41,7 @@ export async function GET() {
         : null,
     },
     metrics,
+    apiKeys: keys.data,
+    apiMetrics: { carts: carts.count, orders: manufacturingOrders.count },
   })
 }
