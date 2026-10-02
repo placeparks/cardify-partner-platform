@@ -1,11 +1,11 @@
 "use client"
 
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createBrowserClient } from "@supabase/ssr"
 
-let client: ReturnType<typeof createClientComponentClient> | null = null
+let client: ReturnType<typeof createBrowserClient> | null = null
 
 export function getSupabaseBrowserClient() {
-  if (!client) client = createClientComponentClient()
+  if (!client) client = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
   return client
 }
 
