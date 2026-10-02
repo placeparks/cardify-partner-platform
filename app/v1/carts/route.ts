@@ -23,7 +23,7 @@ export async function POST(request: Request) { return api(async () => {
   const id = secret("cart_")
   const now = new Date()
   const cart = { id, partner_id: key.partner_id, api_key_id: key.id, mode: key.mode, status: "open", external_ref: body.external_ref,
-    card_count: body.card_count, card_stock: body.card_stock, affiliate_code: null, return_url: returnUrl,
+    card_count: body.card_count, card_stock: body.card_stock, affiliate_code: key.partner.checkout_affiliate_code || null, return_url: returnUrl,
     certification: body.certification, certification_text: CERTIFICATION, submitted_by: key.partner.user_id,
     idempotency_key: idempotency, request_hash: requestHash, checkout_token_hash: digest(token),
     checkout_url: `${origin.replace(/\/$/, "")}/partner-checkout/${token}`, order_id: null,
