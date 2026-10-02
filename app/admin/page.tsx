@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Check, CheckCircle2, Clock3, Code2, LayoutDashboard, Mail, Percent, ShieldCheck, X, XCircle } from "lucide-react"
 import { signInWithGoogle } from "@/lib/supabase-browser"
+import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
 export default function AdminPage() {
   const [state, setState] = useState<any>({ loading: true, requests: [] })
@@ -26,7 +27,7 @@ export default function AdminPage() {
     const response = await fetch(`/api/admin/partnerships/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, approvedPercentage, adminNotes }),
+      body: JSON.stringify({ status, ...(PARTNER_REVENUE_SHARING_ENABLED ? { approvedPercentage } : {}), adminNotes }),
     })
     const data = await response.json()
     if (!response.ok) {
@@ -84,7 +85,7 @@ export default function AdminPage() {
             <ShieldCheck className="h-5 w-5" />
           </span>
           <div>
-            <p className="font-mono text-sm font-bold text-[#f4fff3]">Cardify Admin</p>
+            <p className="font-mono text-sm font-bold text-[#f4fff3]">TCGPlaytest Admin</p>
             <p className="font-mono text-[10px] uppercase tracking-widest text-[#00ff9d]">Review access</p>
           </div>
         </div>
@@ -101,7 +102,7 @@ export default function AdminPage() {
         <header className="mb-8">
           <h1 className="text-4xl font-black text-[#f4fff3]">Admin Review Panel</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#b9cbbc]">
-            Manage partnership requests, review submitted shop details, and set the final partner percentage.
+            Manage partnership requests, review submitted shop details, and approve widget and REST API access.
           </p>
         </header>
 
@@ -151,8 +152,7 @@ export default function AdminPage() {
               <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Current actions</p>
               <div className="mt-4 space-y-3 text-sm leading-6 text-[#b9cbbc]">
                 <p>Approve partners after checking their submitted shop details.</p>
-                <p>Set the final percentage before approval.</p>
-                <p>Approved partners receive dashboard access and widget code.</p>
+                <p>Approved partners receive widget code and REST API access without Stripe Connect.</p>
               </div>
             </div>
           </aside>
@@ -332,18 +332,18 @@ function RequestCard({ request, saving, onDecide, compact = false }: { request: 
         </div>
         <p className={`mt-4 text-sm leading-6 text-[#dce1fb] ${compact ? "line-clamp-3" : ""}`}>{request.audience || "No audience notes provided."}</p>
         <div className="mt-4 flex flex-wrap gap-3 font-mono text-xs uppercase tracking-wider text-[#b9cbbc]">
-          <span className="border border-[#3b4a3f]/30 bg-[#0c1324] px-3 py-2">Requested {request.proposed_percentage ?? 2}%</span>
+          {PARTNER_REVENUE_SHARING_ENABLED && <span className="border border-[#3b4a3f]/30 bg-[#0c1324] px-3 py-2">Requested {request.proposed_percentage ?? 2}%</span>}
           {request.widget_partner_key && <span className="border border-[#00ff9d]/20 bg-[#00ff9d]/10 px-3 py-2 text-[#56ffa8]">Partner key saved</span>}
         </div>
       </div>
 
       {isApproved ? (
         <DecisionPanel icon={CheckCircle2} title="Approved" tone="green">
-          <p>This partner can access the dashboard and widget code.</p>
-          <div className="mt-4 border border-[#00ff9d]/20 bg-[#020617]/70 p-3">
+          <p>This partner can access the dashboard, widget code, and REST API.</p>
+          {PARTNER_REVENUE_SHARING_ENABLED && <div className="mt-4 border border-[#00ff9d]/20 bg-[#020617]/70 p-3">
             <p className="text-xs uppercase tracking-wider text-[#b9cbbc]">Approved percentage</p>
             <p className="mt-1 text-2xl font-black text-[#00ff9d]">{request.approved_percentage ?? request.proposed_percentage}%</p>
-          </div>
+          </div>}
         </DecisionPanel>
       ) : isDeclined ? (
         <DecisionPanel icon={XCircle} title="Declined" tone="pink">
@@ -352,13 +352,13 @@ function RequestCard({ request, saving, onDecide, compact = false }: { request: 
         </DecisionPanel>
       ) : (
         <div className="grid content-start gap-3">
-          <label className="text-sm text-[#b9cbbc]">
+          {PARTNER_REVENUE_SHARING_ENABLED && <label className="text-sm text-[#b9cbbc]">
             Approved percentage
             <div className="mt-2 flex items-center gap-2">
               <input className="field" type="number" min="0" max="30" step="0.1" value={percentage} onChange={(event) => setPercentage(event.target.value)} />
               <Percent className="h-4 w-4 text-[#14d1ff]" />
             </div>
-          </label>
+          </label>}
           <textarea className="field min-h-20" placeholder="Admin notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
           <button disabled={saving} onClick={() => onDecide(request.id, "approved", Number(percentage), notes)} className="button-primary">
             <Check className="h-4 w-4" />
@@ -426,10 +426,10 @@ function ReviewedRequest({ request }: { request: any }) {
       </div>
       <p className="mt-3 break-all text-sm text-[#b9cbbc]">{request.email}</p>
       <p className="mt-2 break-all text-sm text-[#b9cbbc]">{request.website_url}</p>
-      <div className="mt-4 flex items-center justify-between border-t border-[#3b4a3f]/20 pt-3 text-sm">
+      {PARTNER_REVENUE_SHARING_ENABLED && <div className="mt-4 flex items-center justify-between border-t border-[#3b4a3f]/20 pt-3 text-sm">
         <span className="text-[#b9cbbc]">Percentage</span>
         <span className="font-black text-[#00ff9d]">{request.approved_percentage ?? request.proposed_percentage ?? 2}%</span>
-      </div>
+      </div>}
     </article>
   )
 }
@@ -449,7 +449,7 @@ function WidgetAccessCard({ request }: { request: any }) {
         <p className="mt-2 break-all font-mono text-xs text-[#00ff9d]">{request.widget_partner_key}</p>
       </div>
       <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-        <AdminSummaryRow label="Approved percentage" value={`${request.approved_percentage ?? request.proposed_percentage ?? 2}%`} highlight />
+        {PARTNER_REVENUE_SHARING_ENABLED && <AdminSummaryRow label="Approved percentage" value={`${request.approved_percentage ?? request.proposed_percentage ?? 2}%`} highlight />}
         <AdminSummaryRow label="Contact" value={request.email} />
       </div>
     </article>
