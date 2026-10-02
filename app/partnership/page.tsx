@@ -218,7 +218,7 @@ export default function PartnershipPage() {
                   {message && <p className="border border-[#ffb4ab]/25 bg-[#93000a]/20 p-3 text-sm text-[#ffb4ab]">{message}</p>}
 
                   <button disabled={!user || busy} className="group relative w-full overflow-hidden rounded bg-[#00d1ff] py-4 font-sora text-sm font-bold uppercase tracking-[0.2em] text-[#003543] transition hover:-translate-y-0.5 hover:shadow-[0_0_25px_rgba(0,209,255,0.6)] disabled:cursor-not-allowed disabled:opacity-50">
-                    <span className="relative z-10">{busy ? "Submitting..." : "Submit application"}</span>
+                    <span className="relative z-10">{busy ? "Processing..." : "Enter dashboard"}</span>
                     <span className="absolute inset-0 -translate-x-full skew-x-12 bg-white/20 transition-transform duration-700 group-hover:translate-x-full" />
                   </button>
                   <p className="text-center text-xs leading-6 text-[#b9cbbc]">Access activates immediately. We email your widget and API setup guide. TCGPlaytest may revoke access for suspicious activity or infringement.</p>
