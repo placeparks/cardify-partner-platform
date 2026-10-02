@@ -3,19 +3,33 @@ import { makePartnerKey, sendDecisionEmail } from "@/lib/partnership"
 import { ApiError } from "@/lib/manufacturing-contract"
 import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
-export const reviewFields = "id,email,full_name,business_name,website_url,audience,proposed_percentage,approved_percentage,status,admin_notes,reviewed_by,reviewed_at,created_at,updated_at,api_blocked_at"
+export const reviewFields = "id,email,full_name,business_name,website_url,audience,proposed_percentage,approved_percentage,status,admin_notes,reviewed_by,reviewed_at,created_at,updated_at,api_blocked_at,api_block_reason,auto_approved_at,access_revoked_at,access_revoked_by,welcome_email_sent_at,welcome_email_next_attempt_at,welcome_email_attempts,welcome_email_last_error"
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 
 export async function listPartnershipRequests(status: string, page: number) {
-  if (!["all", "pending", "approved", "declined"].includes(status) || !Number.isInteger(page) || page < 1 || page > 10000) {
+  if (!["all", "pending", "approved", "declined", "revoked"].includes(status) || !Number.isInteger(page) || page < 1 || page > 10000) {
     throw new ApiError(400, "invalid_request", "Choose a valid status and page.")
   }
   const pageSize = 25
   let query = db.from("partnership_requests").select(reviewFields, { count: "exact" })
-  if (status !== "all") query = query.eq("status", status)
+  if (status === "revoked") query = query.not("api_blocked_at", "is", null)
+  else if (status !== "all") query = query.eq("status", status).is("api_blocked_at", null)
   const { data, count, error } = await query.order("created_at", { ascending: false }).order("id").range((page - 1) * pageSize, page * pageSize - 1)
   if (error) throw new ApiError(500, "database_error", "Could not load partnership requests.")
   return { requests: data || [], total: count || 0, page, pageSize }
+}
+
+export async function revokePartnership(id: string, body: any, reviewer: string) {
+  if (!uuid.test(id) || typeof body?.reason !== "string" || body.reason.trim().length < 3 || body.reason.length > 2000 ||
+      typeof body.expectedUpdatedAt !== "string" || !Number.isFinite(Date.parse(body.expectedUpdatedAt))) {
+    throw new ApiError(400, "invalid_request", "Enter a revocation reason and refresh the partner before saving.")
+  }
+  const { data, error } = await db.rpc("partner_revoke_access", { p_partner: id, p_revision: body.expectedUpdatedAt, p_reason: body.reason.trim(), p_actor: reviewer })
+  if (error) throw new ApiError(503, "revoke_unavailable", "Could not revoke access. Check the automatic-access database migration and retry.")
+  if (data?.missing) throw new ApiError(404, "not_found", "Partner not found.")
+  if (data?.conflict) throw new ApiError(409, "review_conflict", "This partner has changed. Refresh before revoking access.")
+  if (!data?.partner) throw new ApiError(500, "database_error", "Could not confirm access revocation. Refresh before retrying.")
+  return { request: data.partner, email: { skipped: true }, revoked: true }
 }
 
 export async function reviewPartnership(id: string, body: any, reviewerEmail: string, pendingOnly = false) {
