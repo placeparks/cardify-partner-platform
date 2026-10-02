@@ -9,7 +9,7 @@ const partnership = moduleUrl(`
 export const makePartnerKey=()=> 'generated-widget-key';
 export async function isPartnershipAdmin(id,email){globalThis.partnershipFixture.adminChecks.push({id,email});return !globalThis.partnershipFixture.denied;}
 export async function sendDecisionEmail(row){globalThis.partnershipFixture.emails.push(row);if(globalThis.partnershipFixture.emailFailure)throw new Error('service unavailable');return {sent:true};}`)
-const db = moduleUrl('export const supabaseAdmin={from:(...args)=>globalThis.partnershipFixture.from(...args)};')
+const db = moduleUrl('export const supabaseAdmin={from:(...args)=>globalThis.partnershipFixture.from(...args),rpc:(...args)=>globalThis.partnershipFixture.rpc(...args)};')
 async function load(path, replacements) {
   const raw = await readFile(new URL(path, import.meta.url), 'utf8')
   let js = ts.transpileModule(raw, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
@@ -33,7 +33,11 @@ const id = '11111111-1111-4111-a111-111111111111', revision = '2026-10-02T10:00:
 function fixture(options = {}) {
   const state = {
     row: { id, email: 'applicant@example.com', business_name: 'Example Cards', status: 'pending', proposed_percentage: 5, approved_percentage: null, api_blocked_at: null, widget_partner_key: null, updated_at: revision, ...options.row },
-    updates: [], emails: [], reads: [], ranges: [], adminChecks: [], ...options,
+    updates: [], emails: [], reads: [], ranges: [], adminChecks: [], rpcCalls: [], filterCalls: [], ...options,
+    async rpc(name, params) {
+      state.rpcCalls.push({name,params})
+      return {data:state.conflict ? {conflict:true} : {partner:{...state.row,api_blocked_at:revision,access_revoked_at:revision,access_revoked_by:params.p_actor}}}
+    },
     from(table) {
       assert.equal(table, 'partnership_requests')
       const filters = {}; let changes, columns = '*'
@@ -50,6 +54,7 @@ function fixture(options = {}) {
       const query = {
         select(value = '*') { columns = value; state.reads.push(value); return query; },
         eq(key, value) { filters[key] = value; return query; }, update(value) { changes = value; return query; }, order() { return query; },
+        is(key,value) {state.filterCalls.push(['is',key,value]);return query;}, not(key,op,value){state.filterCalls.push(['not',key,op,value]);return query;},
         range(from, to) {
           state.ranges.push([from, to]); const row = Object.fromEntries(columns.split(',').map(field => [field, state.row[field]]))
           return Promise.resolve({ data: [row], count: 26 })
@@ -135,4 +140,19 @@ test('missing applications and database failures never send an approval email', 
     const result = await request({ action: 'review', id, status: 'approved', expectedUpdatedAt: revision })
     assert.equal(result.status, status); assert.equal(f.emails.length, 0)
   }
+})
+
+test('revocation requires both admin checks, a reason and current revision and records the verified reviewer',async()=>{
+  let f=fixture({denied:true});assert.equal((await request({action:'revoke',id,reason:'Suspicious content',expectedUpdatedAt:revision})).status,403);assert.equal(f.rpcCalls.length,0)
+  f=fixture();assert.equal((await request({action:'revoke',id,reason:'x',expectedUpdatedAt:revision})).status,400);assert.equal(f.rpcCalls.length,0)
+  f=fixture();const result=await request({action:'revoke',id,reason:' Suspicious content ',expectedUpdatedAt:revision,reviewed_by:'forged'})
+  assert.equal(result.status,200);assert.equal(result.body.revoked,true);assert.equal(result.body.request.access_revoked_by,'admin@example.com')
+  assert.deepEqual(f.rpcCalls[0],{name:'partner_revoke_access',params:{p_partner:id,p_revision:revision,p_reason:'Suspicious content',p_actor:'admin@example.com'}})
+  assert.equal(f.emails.length,0)
+  f=fixture({conflict:true});assert.equal((await request({action:'revoke',id,reason:'Suspicious content',expectedUpdatedAt:revision})).status,409)
+})
+
+test('approved listings exclude enforcement holds and revoked listings include them',async()=>{
+  let f=fixture();await request({action:'list',status:'approved'});assert.deepEqual(f.filterCalls,[['is','api_blocked_at',null]])
+  f=fixture();await request({action:'list',status:'revoked'});assert.deepEqual(f.filterCalls,[['not','api_blocked_at','is',null]])
 })
