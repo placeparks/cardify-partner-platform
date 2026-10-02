@@ -154,7 +154,7 @@ export default function AdminPage() {
               <p className="font-mono text-sm font-bold uppercase tracking-wider text-[#00d1ff]">Current actions</p>
               <div className="mt-4 space-y-3 text-sm leading-6 text-[#b9cbbc]">
                 <p>New applications receive widget code and REST API access immediately.</p>
-                <p>Review activity and revoke access when necessary. No Stripe Connect account is required.</p>
+                <p>Review activity and revoke access when necessary.</p>
               </div>
             </div>
           </aside>
