@@ -64,23 +64,35 @@
   function install() {
     if (document.querySelector("[data-tcgplaytest-launcher]") || settings.autoButton === "false") return;
     var container = document.createElement("div");
-    container.style.cssText = "position:fixed;right:22px;bottom:22px;z-index:2147482900;max-width:320px;font:14px system-ui,sans-serif";
+    container.setAttribute("data-tcgplaytest-widget", "true");
+    container.style.cssText = "position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:2147482900;width:max-content;max-width:calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));font:14px Inter,Arial,sans-serif;box-sizing:border-box";
     var button = document.createElement("button");
     button.type = "button";
     button.setAttribute("data-tcgplaytest-launcher", "true");
     var label = settings.label || "Print with TCGPlaytest";
-    button.textContent = label;
-    button.style.cssText = "border:0;border-radius:999px;background:#16a34a;color:#fff;padding:15px 22px;font:700 14px system-ui,sans-serif;cursor:pointer;box-shadow:0 12px 30px #0003";
+    button.style.cssText = "display:inline-flex;align-items:center;justify-content:center;gap:10px;max-width:100%;min-height:52px;box-sizing:border-box;border:0;border-radius:0;background:linear-gradient(100deg,#e06e53,#ed8427 48%,#f5af38);color:#2a1200;padding:14px 20px;font:800 14px/1.4 Inter,Arial,sans-serif;text-align:center;text-transform:none;letter-spacing:normal;cursor:pointer;box-shadow:0 12px 30px #0004;white-space:normal;overflow-wrap:anywhere";
+    var logo = document.createElement("img");
+    logo.src = platformOrigin + "/pwa-icons/favicon.svg";
+    logo.alt = "";
+    logo.width = 28; logo.height = 28;
+    logo.style.cssText = "display:block;flex:none;width:28px;height:28px;object-fit:contain";
+    logo.addEventListener("error", function () { logo.hidden = true; logo.style.display = "none"; });
+    var labelText = document.createElement("span");
+    labelText.textContent = label;
+    labelText.style.cssText = "min-width:0";
+    button.appendChild(logo); button.appendChild(labelText);
+    button.addEventListener("focus", function () { button.style.outline = "3px solid #b6abd4"; button.style.outlineOffset = "4px"; });
+    button.addEventListener("blur", function () { button.style.outline = ""; button.style.outlineOffset = ""; });
     var error = document.createElement("p");
     error.setAttribute("role", "alert");
-    error.style.cssText = "background:white;color:#991b1b;padding:12px;border-radius:8px";
+    error.style.cssText = "box-sizing:border-box;max-width:320px;margin:0 0 12px;padding:14px;background:#061f3e;color:#f4efff;border:1px solid #b6abd4;border-radius:0;font:14px/1.5 Inter,Arial,sans-serif;overflow-wrap:anywhere";
     error.hidden = true;
     button.addEventListener("click", async function () {
       if (button.disabled) return;
-      button.disabled = true; button.textContent = "Opening checkout…"; error.hidden = true;
+      button.disabled = true; button.setAttribute("aria-busy", "true"); labelText.textContent = "Opening checkout…"; error.hidden = true;
       try { await open(); }
       catch (caught) { error.textContent = caught.name === "AbortError" ? "Checkout timed out. Please try again." : caught.message; error.hidden = false; }
-      finally { button.disabled = false; button.textContent = label; }
+      finally { button.disabled = false; button.setAttribute("aria-busy", "false"); labelText.textContent = label; }
     });
     container.appendChild(error); container.appendChild(button); document.body.appendChild(container);
   }
