@@ -20,6 +20,15 @@ export function httpsUrl(value: unknown, field: string): string {
   return url.href
 }
 
+export function partnerReturnUrl(value: unknown, website: unknown): string {
+  const registered = httpsUrl(website, "registered website")
+  const destination = value ? httpsUrl(value, "return_url") : registered
+  if (new URL(destination).origin !== new URL(registered).origin) {
+    throw new ApiError(400, "invalid_request", "return_url must belong to the registered partner website")
+  }
+  return destination
+}
+
 function hash(value: unknown, field: string) {
   if (typeof value !== "string" || !/^[a-fA-F0-9]{64}$/.test(value)) throw new ApiError(400, "invalid_request", `${field} must be the SHA-256 of the file bytes`)
   return value.toLowerCase()
