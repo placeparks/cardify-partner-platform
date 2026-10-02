@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { api, internalAuth, json } from "@/lib/partner-api"
 import { isPartnershipAdmin } from "@/lib/partnership"
 import { ApiError } from "@/lib/manufacturing-contract"
-import { listPartnershipRequests, reviewPartnership, reviewFields } from "@/lib/partnership-review"
+import { listPartnershipRequests, reviewPartnership, revokePartnership, reviewFields } from "@/lib/partnership-review"
 
 export const maxDuration = 60
 
@@ -18,12 +18,12 @@ export async function POST(request: Request) { return api(async () => {
   }
   let result
   if (body.action === "list") {
-    result = await listPartnershipRequests(body.status ?? "pending", body.page ?? 1)
-  } else if (body.action === "review") {
+    result = await listPartnershipRequests(body.status ?? "all", body.page ?? 1)
+  } else if (["review", "revoke"].includes(body.action)) {
     if (typeof body.expectedUpdatedAt !== "string" || !body.expectedUpdatedAt) throw new ApiError(400, "invalid_request", "Refresh the application before submitting a decision.")
-    const reviewed = await reviewPartnership(body.id, body, actor.email, true)
+    const reviewed = body.action === "revoke" ? await revokePartnership(body.id, body, actor.email) : await reviewPartnership(body.id, body, actor.email, true)
     const safeRequest = Object.fromEntries(reviewFields.split(",").map(field => [field, reviewed.request[field]]))
-    result = { request: safeRequest, email: reviewed.email }
+    result = { request: safeRequest, email: reviewed.email, revoked: body.action === "revoke" }
   } else throw new ApiError(400, "invalid_request", "Unsupported partnership action.")
   return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } })
 }) }
