@@ -2,8 +2,10 @@ import { NextResponse } from "next/server"
 import { getSignedInUser } from "@/lib/partnership"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { cardifyAppOrigin, stripeRequest } from "@/lib/stripe-connect"
+import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
 export async function POST(request: Request) {
+  if (!PARTNER_REVENUE_SHARING_ENABLED) return NextResponse.json({ error: "Partner payouts are paused. Widget and API access do not require Stripe Connect." }, { status: 403 })
   const { user } = await getSignedInUser()
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 })
 
