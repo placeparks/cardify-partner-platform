@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { api, authenticate, checked, digest, json, publicCart, secret } from "@/lib/partner-api"
-import { ApiError, CERTIFICATION, validateCart } from "@/lib/manufacturing-contract"
+import { ApiError, CERTIFICATION, partnerReturnUrl, validateCart } from "@/lib/manufacturing-contract"
 
 export const runtime = "nodejs"
 export async function POST(request: Request) { return api(async () => {
@@ -10,7 +10,7 @@ export async function POST(request: Request) { return api(async () => {
   const idempotency = request.headers.get("idempotency-key")
   if (!idempotency || !/^[\x21-\x7e]{1,200}$/.test(idempotency)) throw new ApiError(400, "invalid_request", "Idempotency-Key is required (1–200 printable characters)")
   const body = validateCart(await json(request), Number(process.env.PARTNER_MAX_CARDS || 1000))
-  if (body.return_url && new URL(body.return_url).origin !== new URL(key.partner.website_url).origin) throw new ApiError(400, "invalid_request", "return_url must belong to the approved partner website")
+  const returnUrl = partnerReturnUrl(body.return_url, key.partner.website_url)
   const requestHash = digest(JSON.stringify(body))
   const existing = checked(await db.from("partner_carts").select("*").eq("partner_id", key.partner_id).eq("mode", key.mode).eq("idempotency_key", idempotency).maybeSingle())
   if (existing) {
@@ -23,7 +23,7 @@ export async function POST(request: Request) { return api(async () => {
   const id = secret("cart_")
   const now = new Date()
   const cart = { id, partner_id: key.partner_id, api_key_id: key.id, mode: key.mode, status: "open", external_ref: body.external_ref,
-    card_count: body.card_count, card_stock: body.card_stock, affiliate_code: null, return_url: body.return_url,
+    card_count: body.card_count, card_stock: body.card_stock, affiliate_code: null, return_url: returnUrl,
     certification: body.certification, certification_text: CERTIFICATION, submitted_by: key.partner.user_id,
     idempotency_key: idempotency, request_hash: requestHash, checkout_token_hash: digest(token),
     checkout_url: `${origin.replace(/\/$/, "")}/partner-checkout/${token}`, order_id: null,
