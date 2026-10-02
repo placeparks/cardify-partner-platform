@@ -8,6 +8,7 @@ const sample = `const response = await fetch(API_BASE + "/v1/carts", {
   },
   body: JSON.stringify({
     external_ref: customerOrder.id,
+    return_url: new URL("/order-complete", process.env.STORE_ORIGIN).href,
     card_stock: "standard",
     items: [{ image_url: frontUrl, sha256: frontSha256,
       back_image_url: backUrl, back_sha256: backSha256, quantity: 3 }],
@@ -25,7 +26,7 @@ if (!response.ok) throw new Error(cart.error.message);
 return { checkout_url: cart.checkout_url };`
 export default function DocsPage() {return <article className="mx-auto max-w-4xl space-y-6 px-5 py-12 leading-8"><h1 className="text-4xl font-black">Partner REST API v1</h1><p>Authenticate from your server with a <code>tcgp_test_</code> or <code>tcgp_live_</code> bearer key. The base URL is the deployed partner platform origin. Never expose API keys in browser code.</p>
   <table className="w-full text-left"><thead><tr><th>Endpoint</th><th>Purpose</th></tr></thead><tbody><tr><td>POST /v1/carts</td><td>Create a certified cart and checkout link</td></tr><tr><td>GET /v1/carts/&#123;id&#125;</td><td>Cart status, expiry, and order ID</td></tr><tr><td>GET /v1/orders/&#123;id&#125;</td><td>Production and shipment status, without customer or payment details</td></tr></tbody></table>
-  <h2 className="text-2xl font-bold">Submit an order</h2><p>When a customer places an order, provide HTTPS PNG/JPEG front and back URLs, their SHA-256 hashes, positive integer quantities, and all three certifications shown below. A shared back can be submitted using top-level <code>back_image_url</code> and <code>back_sha256</code>. Only standard stock is available. Optional <code>external_ref</code> is returned in status responses. Optional <code>return_url</code> must use your registered website origin.</p><p>Artwork is downloaded after payment. Keep URLs available until processing finishes, and ensure files match the submitted hashes. Invalid or unavailable files hold production. Test mode validates instructions without downloading artwork, charging, printing, or shipping.</p>
+  <h2 className="text-2xl font-bold">Submit an order</h2><p>When a customer places an order, provide HTTPS PNG/JPEG front and back URLs, their SHA-256 hashes, positive integer quantities, and all three certifications shown below. A shared back can be submitted using top-level <code>back_image_url</code> and <code>back_sha256</code>. Only standard stock is available. Optional <code>external_ref</code> is returned in status responses. After payment confirmation, customers return to your registered website. To choose a specific page, supply <code>return_url</code> on that same HTTPS origin. Your server must still confirm payment through order webhooks or the order API.</p><p>Artwork is downloaded after payment. Keep URLs available until processing finishes, and ensure files match the submitted hashes. Invalid or unavailable files hold production. Test mode validates instructions without downloading artwork, charging, printing, or shipping.</p>
   <pre className="overflow-auto rounded border border-cyan-300/20 bg-slate-950 p-5 text-xs leading-6 text-emerald-300">{sample}</pre>
   <section id="widget" className="scroll-mt-24 space-y-4">
     <h2 className="text-2xl font-bold">Checkout widget</h2>
