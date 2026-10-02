@@ -2,8 +2,10 @@ import { NextResponse } from "next/server"
 import { getSignedInUser, sendWidgetReadyEmail } from "@/lib/partnership"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 import { isStripeAccountReady, stripeRequest } from "@/lib/stripe-connect"
+import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
 export async function GET() {
+  if (!PARTNER_REVENUE_SHARING_ENABLED) return NextResponse.json({ payoutsEnabled: false, required: false })
   const { user } = await getSignedInUser()
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 })
 
