@@ -1,0 +1,10 @@
+export default function CopyrightPage() {
+  const contact = process.env.DMCA_CONTACT_EMAIL
+  return <article className="mx-auto max-w-3xl space-y-6 px-5 py-12 leading-8"><h1 className="text-4xl font-bold">Copyright notices and counter-notices</h1>
+    <p>TCGPlaytest manufactures client-supplied content. Reports of infringement can result in a production hold, file block, order cancellation, or account suspension. Repeat infringers may have their API access terminated.</p>
+    <p>{contact?<>Send notices to <a className="text-cyan-300 underline" href={`mailto:${contact}`}>{contact}</a>.</>:<>Use the <a className="text-cyan-300 underline" href="https://tcgplaytest.com/dmca">TCGPlaytest copyright contact page</a> to submit a notice.</>}</p>
+    <h2 className="text-2xl font-bold">Include in a notice</h2><ul className="list-disc pl-6"><li>Your physical or electronic signature and contact details.</li><li>Identification of the copyrighted work and the material at issue, with order, cart, file, or URL details sufficient to locate it.</li><li>A statement of good-faith belief that the use is not authorized by the owner, its agent, or law.</li><li>A statement that your information is accurate and, under penalty of perjury, that you are authorized to act for the owner.</li></ul>
+    <h2 className="text-2xl font-bold">Counter-notices</h2><p>Identify the removed or disabled material and its prior location, provide your signature, name, address and telephone number, state under penalty of perjury that removal resulted from mistake or misidentification, and include the required consent to federal-court jurisdiction and acceptance of service. Use the same contact channel. We record counter-notices and any court-action notice for review; restoration is never automatic in the manufacturing queue.</p>
+    <p>See the <a className="text-cyan-300 underline" href="https://www.copyright.gov/512/">U.S. Copyright Office’s Section 512 information</a> for notice and counter-notice requirements.</p>
+  </article>
+}
