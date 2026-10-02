@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getSignedInUser } from "@/lib/partnership"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
 export async function POST(request: Request) {
   const { user } = await getSignedInUser()
@@ -8,16 +9,16 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({error:"Invalid JSON"},{status:400})
-  const {data:existing,error:lookupError} = await supabaseAdmin.from("partnership_requests").select("status,api_blocked_at").eq("user_id",user.id).maybeSingle()
+  const {data:existing,error:lookupError} = await supabaseAdmin.from("partnership_requests").select("status,api_blocked_at,proposed_percentage").eq("user_id",user.id).maybeSingle()
   if (lookupError) return NextResponse.json({error:"Could not check application"},{status:500})
   if (existing && (existing.status !== "pending" || existing.api_blocked_at)) return NextResponse.json({error:"Contact support to change a reviewed application"},{status:409})
-  const proposedPercentage = Number(body.proposedPercentage)
+  const proposedPercentage = PARTNER_REVENUE_SHARING_ENABLED ? Number(body.proposedPercentage) : (existing?.proposed_percentage ?? 0)
 
   let website: URL
   try { website = new URL(body.websiteUrl) } catch { return NextResponse.json({error:"Valid website URL required"},{status:400}) }
   if (website.protocol !== "https:" || website.username || website.password) return NextResponse.json({error:"Use an HTTPS website URL"},{status:400})
   if (!body.businessName || !body.websiteUrl || !Number.isFinite(proposedPercentage) || proposedPercentage < 0 || proposedPercentage > 30) {
-    return NextResponse.json({ error: "Business name, website, and percentage are required" }, { status: 400 })
+    return NextResponse.json({ error: "Valid business name and website are required" }, { status: 400 })
   }
 
   const { data, error } = await supabaseAdmin
