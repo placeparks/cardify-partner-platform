@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
 import { NextResponse } from "next/server"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { getSignedInUser, isPartnershipAdmin } from "@/lib/partnership"
-import { ApiError, TERMS_VERSION } from "@/lib/manufacturing-contract"
+import { ApiError, hasPartnerTerms } from "@/lib/manufacturing-contract"
 
 export const digest = (value: string | Buffer) => createHash("sha256").update(value).digest("hex")
 export const secret = (prefix: string) => `${prefix}${randomBytes(32).toString("hex")}`
@@ -48,7 +48,8 @@ export async function authenticate(request: Request, options: { polling?: boolea
   const key = request.headers.get("authorization")?.match(/^Bearer (tcgp_(test|live)_[a-f0-9]{64})$/)?.[1]
   if (!key) throw new ApiError(401, "invalid_api_key", "A server-side bearer API key is required")
   const record = checked(await db.from("partner_api_keys").select("*, partner:partnership_requests(*)").eq("key_hash", digest(key)).is("revoked_at", null).maybeSingle())
-  if (!record || record.partner.status !== "approved" || record.partner.api_blocked_at || record.partner.terms_version !== TERMS_VERSION) throw new ApiError(401, "invalid_api_key", "API key is unavailable or partner terms require acceptance")
+  if (!record || record.partner.status !== "approved" || record.partner.api_blocked_at) throw new ApiError(401, "invalid_api_key", "API key is unavailable")
+  if (!hasPartnerTerms(record.partner)) throw new ApiError(403, "terms_required", "Accept the current partner terms in the dashboard. Your existing API key can still be used after acceptance.")
   if (!options.polling) {
     const allowed = checked(await db.rpc("partner_rate_limit", { p_key: record.id, p_limit: Number(process.env.PARTNER_RATE_LIMIT || 60) }))
     if (!allowed) throw new ApiError(429, "rate_limited", "Too many requests")
@@ -60,5 +61,6 @@ export function publicCart(cart: any) {
   return { id: cart.id, status,
     external_ref: cart.external_ref, card_count: cart.card_count, card_stock: cart.card_stock, affiliate_code: cart.affiliate_code,
     progress: { done: cart.validation_done || 0, total: cart.validation_total || 0 }, errors: cart.validation_errors || [],
+    partner_terms_version: cart.partner_terms_version || null,
     mode: cart.mode, ...(status === "open" ? { checkout_url: cart.checkout_url } : {}), order_id: cart.order_id, expires_at: cart.expires_at, created_at: cart.created_at }
 }
