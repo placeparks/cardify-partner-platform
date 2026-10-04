@@ -6,7 +6,7 @@
   var platformOrigin = new URL(script.src).origin;
   var settings = script.dataset || {};
   var checkoutOrigin = settings.checkoutOrigin ? new URL(settings.checkoutOrigin).origin : platformOrigin;
-  var defaults = { cartEndpoint: settings.cartEndpoint || "/api/tcgplaytest/cart" };
+  var defaults = { cartEndpoint: settings.cartEndpoint || "/api/tcgplaytest/cart", statusEndpoint: settings.cartStatusEndpoint };
   var activeRequest = null;
 
   function checkoutUrl(value) {
@@ -34,7 +34,7 @@
       var timeout = setTimeout(function () { controller.abort(); }, 30000);
       try {
         // The partner endpoint authenticates its customer, loads that customer's cart,
-        // certifies the artwork and calls POST /v1/carts with its server-only API key.
+        // calls POST /v1/carts with its server-only API key.
         var response = await fetch(endpoint.href, {
           method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
           headers: { "Content-Type": "application/json" }, body: "{}", signal: controller.signal,
@@ -46,8 +46,36 @@
         }
       } finally { clearTimeout(timeout); }
     }
-    if (!result || typeof result.checkout_url !== "string") {
-      throw new Error("Your server must return checkout_url from POST /v1/carts.");
+    var deadline = Date.now() + 10 * 60 * 1000;
+    while (result && result.status === "validating") {
+      if (Date.now() > deadline) throw new Error("Artwork is still being checked. Try again to resume this cart.");
+      if (typeof result.id !== "string" || !/^cart_[a-f0-9]{64}$/.test(result.id)) throw new Error("Your server returned an invalid cart ID.");
+      await new Promise(function (resolve) { setTimeout(resolve, 3000); });
+      if (typeof config.pollCart === "function") result = await config.pollCart(result.id);
+      else {
+        var statusUrl = new URL(config.statusEndpoint || config.cartEndpoint, window.location.origin);
+        if (statusUrl.origin !== window.location.origin || statusUrl.username || statusUrl.password) throw new Error("The status endpoint must be on your own website.");
+        statusUrl.searchParams.set("cart_id", result.id);
+        var pollController = new AbortController();
+        var pollTimeout = setTimeout(function () { pollController.abort(); }, 30000);
+        try {
+          var poll = await fetch(statusUrl.href, {credentials:"same-origin",redirect:"error",cache:"no-store",signal:pollController.signal});
+          if (poll.status === 429) {
+            var delay = Number(poll.headers.get("Retry-After")) || 60;
+            await new Promise(function (resolve) { setTimeout(resolve, Math.max(3, delay) * 1000); });
+            continue;
+          }
+          var next = await poll.json();
+          if (!poll.ok) throw new Error(next.error && next.error.message || "Could not check artwork. Try again to resume.");
+          result = next;
+        } finally { clearTimeout(pollTimeout); }
+      }
+    }
+    if (result && result.status === "failed") {
+      throw new Error((result.errors || []).map(function (item) { return "Item " + (item.item_index + 1) + " " + (item.side || "") + ": " + item.message; }).join(" ") || "Artwork checks failed. Fix the files and create a new cart.");
+    }
+    if (!result || result.status && result.status !== "open" || typeof result.checkout_url !== "string") {
+      throw new Error("Your server must return an open cart with its checkout_url after validation.");
     }
     // A redirect uses the normal checkout, including the customer's affiliate-code field.
     // Payment/production success must be confirmed with signed order webhooks.
@@ -89,7 +117,7 @@
     error.hidden = true;
     button.addEventListener("click", async function () {
       if (button.disabled) return;
-      button.disabled = true; button.setAttribute("aria-busy", "true"); labelText.textContent = "Opening checkout…"; error.hidden = true;
+      button.disabled = true; button.setAttribute("aria-busy", "true"); labelText.textContent = "Checking artwork…"; error.hidden = true;
       try { await open(); }
       catch (caught) { error.textContent = caught.name === "AbortError" ? "Checkout timed out. Please try again." : caught.message; error.hidden = false; }
       finally { button.disabled = false; button.setAttribute("aria-busy", "false"); labelText.textContent = label; }
