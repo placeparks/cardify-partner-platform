@@ -39,17 +39,26 @@ export function internalAuth(request: Request) {
   const provided = request.headers.get("authorization")?.replace(/^Bearer /, "") || ""
   if (!configured || configured.length < 32 || !timingSafeEqual(Buffer.from(digest(provided)), Buffer.from(digest(configured)))) throw new ApiError(401, "authentication_required", "Invalid internal credential")
 }
-export async function authenticate(request: Request) {
+export function cronAuth(request: Request) {
+  const configured = process.env.CRON_SECRET
+  const provided = request.headers.get("authorization")?.replace(/^Bearer /, "") || ""
+  if (!configured || configured.length < 32 || !timingSafeEqual(Buffer.from(digest(provided)), Buffer.from(digest(configured)))) throw new ApiError(401, "authentication_required", "Invalid worker credential")
+}
+export async function authenticate(request: Request, options: { polling?: boolean } = {}) {
   const key = request.headers.get("authorization")?.match(/^Bearer (tcgp_(test|live)_[a-f0-9]{64})$/)?.[1]
   if (!key) throw new ApiError(401, "invalid_api_key", "A server-side bearer API key is required")
   const record = checked(await db.from("partner_api_keys").select("*, partner:partnership_requests(*)").eq("key_hash", digest(key)).is("revoked_at", null).maybeSingle())
   if (!record || record.partner.status !== "approved" || record.partner.api_blocked_at || record.partner.terms_version !== TERMS_VERSION) throw new ApiError(401, "invalid_api_key", "API key is unavailable or partner terms require acceptance")
-  const allowed = checked(await db.rpc("partner_rate_limit", { p_key: record.id, p_limit: Number(process.env.PARTNER_RATE_LIMIT || 60) }))
-  if (!allowed) throw new ApiError(429, "rate_limited", "Too many requests")
+  if (!options.polling) {
+    const allowed = checked(await db.rpc("partner_rate_limit", { p_key: record.id, p_limit: Number(process.env.PARTNER_RATE_LIMIT || 60) }))
+    if (!allowed) throw new ApiError(429, "rate_limited", "Too many requests")
+  }
   return record
 }
 export function publicCart(cart: any) {
-  return { id: cart.id, status: cart.status === "open" && Date.parse(cart.expires_at) <= Date.now() ? "expired" : cart.status,
+  const status = ["validating", "open"].includes(cart.status) && Date.parse(cart.expires_at) <= Date.now() ? "expired" : cart.status
+  return { id: cart.id, status,
     external_ref: cart.external_ref, card_count: cart.card_count, card_stock: cart.card_stock, affiliate_code: cart.affiliate_code,
-    mode: cart.mode, checkout_url: cart.checkout_url, order_id: cart.order_id, expires_at: cart.expires_at, created_at: cart.created_at }
+    progress: { done: cart.validation_done || 0, total: cart.validation_total || 0 }, errors: cart.validation_errors || [],
+    mode: cart.mode, ...(status === "open" ? { checkout_url: cart.checkout_url } : {}), order_id: cart.order_id, expires_at: cart.expires_at, created_at: cart.created_at }
 }
