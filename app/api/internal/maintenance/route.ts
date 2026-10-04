@@ -1,7 +1,6 @@
-import { ingestArtwork } from "@/lib/ingest-artwork"
 import { createHmac } from "node:crypto"
 import { NextResponse } from "next/server"
-import { api, checked, internalAuth } from "@/lib/partner-api"
+import { api, checked, internalAuth, cronAuth } from "@/lib/partner-api"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { safeRequest } from "@/lib/safe-download"
 import { decrypt } from "@/lib/webhook-secrets"
@@ -9,27 +8,32 @@ import { deliverWelcomeEmail } from "@/lib/partner-welcome"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
-export async function POST(request: Request) { return api(async () => {
-  internalAuth(request)
+export async function POST(request: Request) { return api(async () => { internalAuth(request); return maintain() }) }
+export async function GET(request: Request) { return api(async () => { cronAuth(request); return maintain() }) }
+async function maintain() {
   const started = Date.now()
-  const now = new Date().toISOString(); const result = { ingested: 0, deleted: 0, delivered: 0, failures: 0, welcomeEmailSent: false }
+  const now = new Date().toISOString(); const result = { deleted: 0, delivered: 0, failures: 0, welcomeEmailSent: false }
   // One claimed message per run, with a shared 12-second email deadline.
   result.welcomeEmailSent = (await deliverWelcomeEmail()).sent
-  // Small batches keep retries bounded; uploads use deterministic paths and are safe to repeat.
-  const paid = checked(await db.from("partner_manufacturing_orders").select("cart_id,partner:partnership_requests(api_blocked_at)").eq("status","paid").limit(20))
-  for (const order of paid as any[]) {
-    if (Date.now()-started > 20000) break
-    if (order.partner.api_blocked_at) continue
-    const batch = await ingestArtwork(order.cart_id, started + 20000)
-    result.ingested += batch.ingested
-    result.failures += batch.failures
+  const expired = checked(await db.from("partner_carts").select("id,created_at,flow_version,acceptances:partner_checkout_acceptances(id)").in("status",["open","validating"]).lte("expires_at",now).is("payment_reconciled_at",null).limit(10)) || []
+  for (const cart of expired) {
+    if (cart.flow_version === 2 && !cart.acceptances?.length) continue
+    if (Date.now()-started>23000) break
+    try {
+      const response=await fetch(`${process.env.TCGPLAYTEST_CHECKOUT_ORIGIN}/api/partner/reconcile-cart`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${process.env.PARTNER_INTERNAL_SECRET}`},body:JSON.stringify({cart_id:cart.id,created_at:cart.created_at}),signal:AbortSignal.timeout(10000),redirect:"error"})
+      if (!response.ok) throw new Error("Reconciliation unavailable")
+      const payment=await response.json()
+      if (payment.state==="paid") checked(await db.rpc("partner_order_event",{p_cart:cart.id,p_order:payment.order_id,p_status:"paid",p_shipment:null}))
+      else if (payment.state==="unpaid") checked(await db.from("partner_carts").update({payment_reconciled_at:now}).eq("id",cart.id).in("status",["open","validating"]))
+    } catch { result.failures++ }
   }
 
   // Expiration and its webhook are atomic, so an interrupted run cannot lose the event.
   checked(await db.rpc("partner_expire_carts"))
   const due = checked(await db.rpc("partner_claim_cleanup")) || []
   for (const file of due) {
-    checked(await db.storage.from("partner-artwork").remove([file.storage_path || `${file.cart_id}/${file.id}`]))
+    if (Date.now()-started>40000) break
+    if (file.storage_path) checked(await db.storage.from("partner-artwork").remove([file.storage_path]))
     checked(await db.from("partner_artwork").update({state:"deleted",source_url:null,storage_path:null,deleted_at:now}).eq("id",file.id).eq("legal_hold",false))
     result.deleted++
   }
@@ -50,4 +54,4 @@ export async function POST(request: Request) { return api(async () => {
   }
   checked(await db.from("partner_api_rate_windows").delete().lt("window_at",new Date(Date.now()-86400_000).toISOString()))
   return NextResponse.json(result)
-}) }
+}
