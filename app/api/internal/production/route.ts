@@ -2,18 +2,17 @@ import { NextResponse } from "next/server"
 import { api, checked, internalAuth, json } from "@/lib/partner-api"
 import { ApiError } from "@/lib/manufacturing-contract"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
-import { ingestArtwork } from "@/lib/ingest-artwork"
 export const maxDuration = 60
 export async function POST(request: Request) { return api(async () => {
   internalAuth(request); const body = await json(request)
   const order = checked(await db.from("partner_manufacturing_orders").select("*,partner:partnership_requests(api_blocked_at)").eq("id",body.order_id).maybeSingle())
   if (!order) throw new ApiError(404,"not_found","Manufacturing order not found; check payment webhook delivery")
-  if (body.prepare === true) await ingestArtwork(order.cart_id)
-  // Re-read after preparation to honor holds applied while files were downloading.
+  // prepare is retained for old dashboard callers, but never downloads artwork.
   const current = checked(await db.from("partner_manufacturing_orders").select("status,shipment,partner:partnership_requests(api_blocked_at)").eq("id",order.id).single())
   if (!current) throw new ApiError(404,"not_found","Manufacturing order not found")
   const files = checked(await db.from("partner_artwork").select("*").eq("cart_id",order.cart_id).order("item_index")) || []
-  const blocks = files.length ? checked(await db.from("partner_content_blocks").select("sha256").in("sha256",files.map((f:any)=>f.expected_sha256))) || [] : []
+  const hashes = files.flatMap((f:any)=>[f.actual_sha256,f.expected_sha256]).filter(Boolean)
+  const blocks = hashes.length ? checked(await db.from("partner_content_blocks").select("sha256").in("sha256",hashes)) || [] : []
   const available = ["paid","in_production"].includes(current.status) && !(current.partner as any)?.api_blocked_at && !blocks.length
   const ready = available && files.length > 0 && files.every((f:any)=>["stored","processed"].includes(f.state) && f.storage_path)
   if (body.include_urls === false) return NextResponse.json({order_id:order.id,cart_id:order.cart_id,status:current.status,shipment:current.shipment,ready,
