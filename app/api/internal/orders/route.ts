@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { api, checked, internalAuth, json } from "@/lib/partner-api"
 import { ApiError, httpsUrl } from "@/lib/manufacturing-contract"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
+export const maxDuration = 60
 export async function POST(request: Request) { return api(async () => {
   internalAuth(request); const body = await json(request)
   if (!body.cart_id || !body.order_id || !["paid","in_production","shipped","cancelled"].includes(body.status)) throw new ApiError(400,"invalid_request","Cart, order and valid lifecycle status required")
