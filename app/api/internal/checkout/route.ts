@@ -14,12 +14,14 @@ export async function POST(request: Request) { return api(async () => {
   if (!files.length || files.some((f:any)=>f.state !== "stored" || !f.storage_path)) throw new ApiError(409,"artwork_not_ready","Artwork has not passed validation")
   let acceptance = null
   if (body.acceptance !== undefined) {
-    if (body.acceptance?.accepted !== true || body.acceptance?.terms_version !== CUSTOMER_TERMS_VERSION || typeof body.acceptance?.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.acceptance.email.trim()) || body.acceptance.email.length > 254) throw new ApiError(400,"rights_acceptance_required","Accept the current image-rights terms before payment")
-    acceptance = checked(await db.rpc("partner_accept_checkout",{p_cart:cart.id,p_email:body.acceptance.email.trim(),p_version:CUSTOMER_TERMS_VERSION}))
+    // Preserve the exact version for checkout pages already open during rollout.
+    if (body.acceptance?.accepted !== true || ![CUSTOMER_TERMS_VERSION, "2026-10-04"].includes(body.acceptance?.terms_version) || typeof body.acceptance?.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.acceptance.email.trim()) || body.acceptance.email.length > 254) throw new ApiError(400,"rights_acceptance_required","Accept the current image-rights terms before payment")
+    acceptance = checked(await db.rpc("partner_accept_checkout",{p_cart:cart.id,p_email:body.acceptance.email.trim(),p_version:body.acceptance.terms_version}))
   }
   // The commerce app receives counts only; production later signs these same files.
   return NextResponse.json({ id: cart.id, card_count: cart.card_count, affiliate_code: cart.affiliate_code, external_ref: cart.external_ref,
-    expires_at: cart.expires_at, certification: cart.certification, partner_id: cart.partner_id,
+    expires_at: cart.expires_at, partner_id: cart.partner_id,
+    partner_terms_version: cart.partner_terms_version, partner_terms_accepted_at: cart.partner_terms_accepted_at,
     customer_terms_version: CUSTOMER_TERMS_VERSION, customer_acceptance: acceptance,
     items: files.filter((f:any)=>f.side === "front").map((f:any)=>({ id: `${cart.id}_${f.item_index}`, quantity: f.quantity, finish: "standard" })) }, { headers: { "Cache-Control": "no-store" } })
 }) }
