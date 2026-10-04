@@ -1,47 +1,57 @@
-import sharp from "sharp"
+import sharp, { type Metadata } from "sharp"
 import { checked, digest } from "@/lib/partner-api"
+import { ApiError } from "@/lib/manufacturing-contract"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { safeRequest } from "@/lib/safe-download"
 
-// Shared by the scheduled worker and authenticated production requests. Never
-// fetch client artwork until a live manufacturing order has recorded payment.
-export async function ingestArtwork(cartId: string, deadline = Date.now() + 20000) {
-  const result = { ingested: 0, failures: 0 }
-  const order = checked(await db.from("partner_manufacturing_orders")
-    .select("status,mode,partner:partnership_requests(api_blocked_at)").eq("cart_id",cartId).maybeSingle())
-  if (!order || order.mode !== "live" || order.status !== "paid" || (order.partner as any)?.api_blocked_at) return result
-  const now = new Date().toISOString()
-  const files = checked(await db.from("partner_artwork").select("*").eq("cart_id",cartId)
-    .eq("state","pending").lte("next_attempt_at",now).order("item_index").limit(4)) || []
-  for (const file of files) {
-    if (Date.now() >= deadline) break
+export async function preflight(bytes: Buffer) {
+  if (bytes.length>20*1024*1024) throw new ApiError(422,"image_too_large","Image exceeds 20 MiB")
+  let metadata: Metadata
+  try { metadata=await sharp(bytes,{limitInputPixels:false}).metadata() }
+  catch { throw new ApiError(422,"image_invalid","Invalid image") }
+  if (!["png","jpeg"].includes(metadata.format||"") || !metadata.width || !metadata.height || (metadata.pages||1)!==1) throw new ApiError(422,"image_invalid","Single-frame PNG/JPEG required")
+  if (metadata.width*metadata.height>40_000_000) throw new ApiError(422,"image_pixels_exceeded","Image exceeds 40 MP")
+  if (metadata.width<Number(process.env.PARTNER_MIN_IMAGE_WIDTH||744) || metadata.height<Number(process.env.PARTNER_MIN_IMAGE_HEIGHT||1040)) throw new ApiError(422,"image_dimensions_invalid","Image dimensions below minimum")
+  try { await sharp(bytes,{limitInputPixels:40_000_000,failOn:"warning"}).stats() }
+  catch { throw new ApiError(422,"image_invalid","Image could not be fully decoded") }
+  return {sha256:digest(bytes),contentType:metadata.format==="png"?"image/png":"image/jpeg"}
+}
+
+// Only a separately scheduled queue worker calls this. No downloads in cart,
+// checkout, payment or print handlers. URL deduplication is scoped to one cart.
+export async function validateQueuedArtwork(deadline=Date.now()+40000) {
+  const result={checked:0,failures:0}
+  while (Date.now()+20000<deadline) {
+    const [job]=checked(await db.rpc("partner_claim_validation"))||[]
+    if (!job) break
+    let errorCode:string|null=null
     try {
-      const blocks = checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",file.expected_sha256)) || []
-      if (blocks.length) {
-        checked(await db.rpc("partner_enforce",{p_target:"cart",p_id:cartId,p_reason:"Submitted file is blocked",p_actor:"maintenance"}))
-        break
+      if (job.attempts>3) throw new ApiError(422,"validation_unavailable","Worker retry limit reached")
+      let bytes:Buffer|undefined
+      if (job.storage_path) {
+        const saved=await db.storage.from("partner-artwork").download(job.storage_path)
+        if (saved.data) bytes=Buffer.from(await saved.data.arrayBuffer())
       }
-      const downloaded = await safeRequest(file.source_url)
-      if (downloaded.status !== 200) throw new Error("image_unreachable")
-      const sha256 = digest(downloaded.bytes)
-      if (sha256 !== file.expected_sha256) throw new Error("image_hash_mismatch")
-      const metadata = await sharp(downloaded.bytes, {limitInputPixels:40_000_000}).metadata()
-      if (!["png","jpeg"].includes(metadata.format || "") || !metadata.width || !metadata.height || (metadata.pages || 1) !== 1) throw new Error("image_invalid")
-      if (metadata.width < Number(process.env.PARTNER_MIN_IMAGE_WIDTH || 1) || metadata.height < Number(process.env.PARTNER_MIN_IMAGE_HEIGHT || 1)) throw new Error("image_dimensions_invalid")
-      await sharp(downloaded.bytes, {limitInputPixels:40_000_000}).stats()
-      const path = `${file.cart_id}/${file.id}`
-      checked(await db.storage.from("partner-artwork").upload(path,downloaded.bytes,{contentType:metadata.format === "png" ? "image/png" : "image/jpeg",upsert:true}))
-      checked(await db.from("partner_artwork").update({storage_path:path,actual_sha256:sha256,state:"stored",received_at:now,source_url:null,last_error:null})
-        .eq("id",file.id).eq("state","pending"))
-      result.ingested++
-    } catch (error) {
-      result.failures++
-      const code = error instanceof Error && ["image_unreachable","image_hash_mismatch","image_invalid","image_dimensions_invalid"].includes(error.message) ? error.message : "ingestion_failed"
-      const attempts = file.ingestion_attempts + 1
-      checked(await db.from("partner_artwork").update({ingestion_attempts:attempts,last_error:code,next_attempt_at:new Date(Date.now()+Math.min(86400,60*2**attempts)*1000).toISOString()}).eq("id",file.id).eq("state","pending"))
-      checked(await db.from("partner_audit_events").insert({entity_type:"artwork",entity_id:file.id,action:"ingestion_failed",actor:"maintenance",details:{cart_id:file.cart_id,code,attempts}}))
-      if (attempts >= 12) checked(await db.rpc("partner_enforce",{p_target:"cart",p_id:file.cart_id,p_reason:`Artwork ingestion failed: ${code}`,p_actor:"maintenance"}))
-    }
+      if (!bytes) {
+        const download=await safeRequest(job.source_url,{maxRedirects:3})
+        if (download.status!==200) throw new ApiError(422,"image_unreachable","Image URL did not return 200")
+        bytes=download.bytes
+      }
+      const file=await preflight(bytes)
+      if (!checked(await db.rpc("partner_reserve_validation",{p_job:job.id,p_lease:job.lease_token,p_hash:file.sha256,p_type:file.contentType}))) continue
+      const blocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",file.sha256))||[]
+      if (blocked.length) throw new ApiError(422,"content_blocked","Artwork blocked")
+      const path=`carts/${job.cart_id}/${file.sha256}`
+      const upload=await db.storage.from("partner-artwork").upload(path,bytes,{contentType:file.contentType,upsert:false})
+      // Identical bytes from another URL in this same cart may already exist.
+      // Never overwrite or reuse any other cart's object.
+      if (upload.error) {
+        const existing=checked(await db.storage.from("partner-artwork").download(path))
+        if (!existing || digest(Buffer.from(await existing.arrayBuffer()))!==file.sha256) throw new Error("Storage unavailable")
+      }
+    } catch (error) { result.failures++;errorCode=error instanceof ApiError ? error.code : "validation_unavailable" }
+    checked(await db.rpc("partner_finish_validation",{p_job:job.id,p_lease:job.lease_token,p_error:errorCode}))
+    result.checked++
   }
   return result
 }
