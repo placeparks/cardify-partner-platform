@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/internal/validation", "schedule": "* * * * *" },
+    { "path": "/api/internal/maintenance", "schedule": "* * * * *" }
+  ]
+}
