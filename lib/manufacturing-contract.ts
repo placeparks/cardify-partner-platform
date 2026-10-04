@@ -1,5 +1,6 @@
 // This version is persisted with each acceptance and manufacturing instruction.
 export const TERMS_VERSION = "2026-10-02"
+export const CUSTOMER_TERMS_VERSION = "2026-10-04"
 export const CERTIFICATION = {
   client_supplied: "The content was supplied by the client or its customer.",
   reproduction_authorized: "The client owns or has permission to reproduce all submitted content.",
@@ -30,6 +31,7 @@ export function partnerReturnUrl(value: unknown, website: unknown): string {
 }
 
 function hash(value: unknown, field: string) {
+  if (value === undefined || value === null) return null
   if (typeof value !== "string" || !/^[a-fA-F0-9]{64}$/.test(value)) throw new ApiError(400, "invalid_request", `${field} must be the SHA-256 of the file bytes`)
   return value.toLowerCase()
 }
@@ -38,8 +40,8 @@ export function validateCart(body: any, maxCards = 1000) {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new ApiError(400, "invalid_request", "Expected a JSON object")
   const allowed = ["items", "back_image_url", "back_sha256", "card_stock", "external_ref", "return_url", "certification"]
   if (Object.keys(body).some(key => !allowed.includes(key))) throw new ApiError(400, "invalid_request", "Unknown field; prices and artwork-library IDs are not accepted")
-  if (body.certification?.terms_version !== TERMS_VERSION || Object.keys(CERTIFICATION).some(key => body.certification?.[key] !== true)) {
-    throw new ApiError(400, "certification_required", "All three rights certifications and the current terms_version are required on every cart")
+  if (body.certification != null && (body.certification?.terms_version !== TERMS_VERSION || Object.keys(CERTIFICATION).some(key => body.certification?.[key] !== true))) {
+    throw new ApiError(400, "invalid_certification", "If supplied, certification must include all three statements and the current terms_version")
   }
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > maxCards) throw new ApiError(400, "invalid_request", `Submit 1–${maxCards} items`)
   // Thick stock remains unavailable until production confirms its specifications and rate.
@@ -61,6 +63,6 @@ export function validateCart(body: any, maxCards = 1000) {
   if (body.external_ref !== undefined && (typeof body.external_ref !== "string" || body.external_ref.length > 200)) throw new ApiError(400, "invalid_request", "external_ref must be at most 200 characters")
   return { items, card_count: count, card_stock: "standard", external_ref: body.external_ref || null,
     return_url: body.return_url ? httpsUrl(body.return_url, "return_url") : null,
-    certification: { ...Object.fromEntries(Object.keys(CERTIFICATION).map(key => [key, true])), terms_version: TERMS_VERSION },
+    certification: body.certification == null ? null : { ...Object.fromEntries(Object.keys(CERTIFICATION).map(key => [key, true])), terms_version: TERMS_VERSION },
   }
 }
