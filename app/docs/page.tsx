@@ -47,7 +47,7 @@ if (!statusResponse.ok) throw new Error(status.error.message);
 // Stop on failed/expired/blocked/cancelled/converted; show the relevant outcome.`
   return <article className="mx-auto min-w-0 max-w-4xl space-y-6 px-5 py-12 leading-8">
     <h1 className="text-3xl font-black sm:text-4xl">Partner API: create, check, checkout</h1>
-    <p>Submit customer artwork URLs from your server, wait for validation, then send the customer to TCGPlaytest checkout. All public API endpoints below use the <code>/v1</code> path. This URL-based workflow does not introduce a <code>/v2</code> endpoint.</p>
+    <p>Upload customer artwork directly to TCGPlaytest storage or supply existing image URLs, wait for validation, then send the customer to checkout. Partners need only a server-side API key; no storage account is needed for direct uploads. All endpoints below use the <code>/v1</code> path.</p>
     <section aria-labelledby="api-base" className="space-y-3 rounded border border-cyan-300/20 bg-slate-950 p-4 sm:p-6">
       <h2 id="api-base" className="text-xl font-bold">API base URL</h2>
       <p><code className="break-all">{config.baseUrl}</code></p>
@@ -74,14 +74,54 @@ if (!statusResponse.ok) throw new Error(status.error.message);
       <li>When <code>status</code> is <code>open</code>, redirect to <code>checkout_url</code>. The customer accepts image rights and pays at TCGPlaytest checkout.</li>
       <li>Confirm payment from a signed <code>order.paid</code> webhook or the order API. TCGPlaytest prints from the already-checked files; payment does not trigger another source download.</li>
     </ol>
-    <p>Send <code>Authorization: Bearer &lt;your API key&gt;</code> on every API request and <code>Content-Type: application/json</code> on POST. Never expose keys in browser code or the widget. Cart and order reads are scoped to the authenticated partner and key mode.</p>
+    <p>Send <code>Authorization: Bearer &lt;your API key&gt;</code> on server-side upload-grant, cart and order API requests, and <code>Content-Type: application/json</code> on POST. Never expose keys in browser code or the widget. Signed storage PUTs and image-reference reads use their temporary URL capability instead, without a bearer key. Cart and order reads are scoped to the partner and key mode.</p>
+
+    <section id="uploads" className="scroll-mt-24 space-y-4">
+      <h2 className="text-2xl font-bold">Direct uploads — no partner storage setup</h2>
+      <p>If your website generates or receives image files, request a temporary upload link from your server. Files go straight to TCGPlaytest-owned private storage. Existing integrations that already have public HTTPS images can skip this step.</p>
+      <Code label="Request upload link">{`// YOUR server: check customer/session ownership first.
+const response = await fetch(${JSON.stringify(config.baseUrl)} + "/v1/uploads", {
+  method: "POST",
+  headers: { Authorization: "Bearer " + process.env.TCGP_API_KEY,
+    "Content-Type": "application/json" },
+  body: JSON.stringify({ content_type: "image/png", size: fileByteCount })
+});
+const grant = await response.json();
+if (!response.ok) throw new Error(grant.error.message);
+// Bind grant.image_url to this customer's session/order.
+// Return the grant to your browser, never the API key.`}</Code>
+      <p><strong>HTTP 201</strong> returns these fields. URLs below are illustrative; use the actual response unchanged.</p>
+      <Code label="Upload grant response">{pretty({ upload_url: "https://storage.example/temporary-upload?token=SIGNED_UPLOAD", method: "PUT", headers: { "Content-Type": "image/png" }, image_url: `${config.baseUrl}/v1/uploads/source?token=SIGNED_REFERENCE`, upload_expires_at: "2026-10-06T14:00:00.000Z", expires_at: "2026-10-14T12:00:00.000Z", max_bytes: 20971520 })}</Code>
+      <Code label="Browser direct upload">{`// Browser: grant came from YOUR authenticated/session-protected server.
+const uploaded = await fetch(grant.upload_url, {
+  method: grant.method,
+  headers: grant.headers,
+  body: file, // raw PNG/JPEG File or Blob, not FormData, JSON or base64
+  credentials: "omit",
+  redirect: "error"
+});
+if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry.");
+// Tell YOUR server the upload finished. It checks ownership, then puts
+// grant.image_url into items[].image_url or back_image_url in POST /v1/carts.
+// Upload every required front/back before creating the cart. No finalize call.`}</Code>
+      <Fields label="Direct upload rules" rows={[
+        ["POST /v1/uploads body", 'Only content_type ("image/png" or "image/jpeg") and size (integer 1–20,971,520 bytes). Metadata only.'],
+        ["upload_url / method / headers", "PUT raw file bytes using the returned headers. No partner API key, storage account credentials or cookies are sent to storage. Browser uploads bypass the application server's body-size limit."],
+        ["upload_expires_at", "RFC 3339 timestamp: upload link expires after 2 hours. It permits one new object and cannot overwrite it. On a failed/uncertain PUT, request a new grant and upload again."],
+        ["image_url / expires_at", "Opaque signed image reference, valid for 8 days. Keep it private and use it unchanged. It belongs to the issuing partner and key mode; source access stops if that key is revoked. Create the cart promptly."],
+        ["Validation", "Successful upload does not mean print-ready. The cart's background worker still checks format, full decoding, size, dimensions, hashes and content. Test keys support uploads and validation, but cannot pay."],
+        ["Storage and retention", "TCGPlaytest stores the source and validated artwork. Maintenance removes expired source staging files, normally within the following day. Each cart gets its own checked files under normal cart/order retention; partners need no cleanup job."],
+        ["Errors", "400 invalid_request: fix metadata. 403 invalid_upload: wrong/tampered partner reference. 404 upload_not_found: PUT not completed. 410 upload_expired: upload again. 503 uploads_unavailable: platform configuration needs attention. Standard authentication and rate-limit errors also apply."],
+      ]}/>
+      <p>Do not share or log signed URLs. The source-reference GET is exempt from key rate limits and redirects to a short-lived read link. Upload grants count toward the shared write limit; honor <code>Retry-After</code>. There is no <code>/finalize</code> endpoint.</p>
+    </section>
 
     <section id="create-cart" className="scroll-mt-24 space-y-4">
       <h2 className="text-2xl font-bold">POST /v1/carts</h2>
       <p><code>Idempotency-Key</code> is required: 1–200 visible ASCII characters (<code>0x21–0x7E</code>), with no spaces. For example, <code>store-order-1042-rev1</code>. Use one value per order revision; retry identical instructions with the same value. Keys are scoped to partner and test/live mode.</p>
       <Fields label="Create cart request fields" rows={[
         ["items", `Required array of 1–${config.maxCards} items. The sum of all quantities must also be at most ${config.maxCards}.`],
-        ["items[].image_url", "Required front-image HTTPS URL."],
+        ["items[].image_url", "Required front-image HTTPS URL: an API-issued image_url after successful upload, or your existing public image URL."],
         ["items[].quantity", `Required positive integer. Maximum ${config.maxCards}, subject to the cart-wide total.`],
         ["items[].back_image_url", "Back-image HTTPS URL. Required unless a shared top-level back_image_url is supplied. An item-specific back overrides the shared back."],
         ["items[].sha256 / back_sha256", "Optional 64-character hexadecimal SHA-256 of exact front/back file bytes, case-insensitive. Omit or use null for server-computed hashes. A mismatch fails that item/side."],
@@ -107,7 +147,7 @@ if (!statusResponse.ok) throw new Error(status.error.message);
       ["Minimum dimensions", `${config.minWidth} pixels wide × ${config.minHeight} pixels high; both dimensions must meet the minimum.`],
       ["Redirects", "At most 3 per download, with HTTPS/public-address checks on every hop."],
       ["Download timeout", "15 seconds total per URL attempt, including DNS, TLS, redirects and body reads. This is not the total queue-processing time for the cart."],
-      ["Rate limit", `${config.rateLimit} requests per key per minute for cart POSTs and order GETs. Authenticated cart GETs are exempt. A 429 response includes Retry-After: 60.`],
+      ["Rate limit", `${config.rateLimit} requests per key per minute shared by upload-grant POSTs, cart POSTs and order GETs. Authenticated cart GETs are exempt. A 429 response includes Retry-After: 60.`],
     ]}/>
     <p>Keep source URLs reachable without authentication until validation finishes. Progress counts unique URLs, not copies. Each URL is checked once per cart in a normal run; an interrupted worker can retry. Files are stored privately at cart-specific paths and never reused across carts.</p>
     <Code label="Server integration example">{sample}</Code>
@@ -192,7 +232,7 @@ if (!statusResponse.ok) throw new Error(status.error.message);
       <h2 className="text-2xl font-bold">Checkout widget</h2>
       <p>Copy the script from your dashboard after implementing server-side cart creation and status routes. The widget calls your same-origin <code>POST /api/tcgplaytest/cart</code>, then polls <code>GET /api/tcgplaytest/cart?cart_id=…</code> until the cart opens. Authenticate the customer, verify order ownership on both routes and apply your shop&apos;s CSRF protection. Relay the API&apos;s cart JSON and errors; never expose the API key.</p>
       <p>Customize routes using <code>data-cart-endpoint</code> and <code>data-cart-status-endpoint</code>. For a custom button use <code>data-auto-button="false"</code> and <code>{"TCGPlaytest.open({createCart, pollCart})"}</code>; both callbacks call your own authenticated server. The widget shows failures and redirects only to a validated TCGPlaytest checkout URL.</p>
-      <p>There are no manufacturing API upload, pre-signed upload or finalize endpoints. Your website hosts or supplies the image URLs.</p>
+      <p>For files generated or uploaded on your website, complete the <a href="#uploads" className="underline">direct upload flow</a> before cart creation. You can also supply existing public HTTPS image URLs. The widget does not need a storage account or a browser-side API key.</p>
     </section>
     <section id="affiliate" className="scroll-mt-24 space-y-4">
       <h2 className="text-2xl font-bold">Optional affiliate code</h2>

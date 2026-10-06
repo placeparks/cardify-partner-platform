@@ -70,7 +70,7 @@ const object = (properties: Record<string, unknown>, required = Object.keys(prop
 
 export function buildOpenApi(config = documentationConfig()) {
   const e = documentationExamples(config.baseUrl)
-  const imageUrl = { type: "string", format: "uri", maxLength: 2048, pattern: "^[Hh][Tt][Tt][Pp][Ss]://", description: "Public IPv4 HTTPS URL, at most 2048 UTF-16 code units; no credentials, fragment or port other than 443. Each redirect is rechecked. Serve PNG/JPEG bytes without authentication." }
+  const imageUrl = { type: "string", format: "uri", maxLength: 2048, pattern: "^[Hh][Tt][Tt][Pp][Ss]://", description: "Use the image_url returned by POST /v1/uploads after its PUT succeeds, or your existing public IPv4 HTTPS image URL. At most 2048 UTF-16 code units; no credentials, fragment or port other than 443. Each redirect is rechecked. Must serve PNG/JPEG bytes without an Authorization header." }
   const hash = { type: ["string", "null"], pattern: "^[a-fA-F0-9]{64}$", description: "Optional SHA-256 of the exact downloaded bytes, not a perceptual hash. A mismatch fails this item/side. Omit or use null to let TCGPlaytest compute it." }
   const quantity = { type: "integer", minimum: 1, maximum: config.maxCards, description: `Number of copies. The sum of all item quantities must be at most ${config.maxCards}.` }
   const externalRef = { type: "string", maxLength: 200, description: "Optional partner reference, at most 200 UTF-16 code units. No format restriction; not a uniqueness or idempotency key. Omitted/empty input is returned as null." }
@@ -87,12 +87,24 @@ export function buildOpenApi(config = documentationConfig()) {
   const orderStatuses = ["paid", "in_production", "shipped", "cancelled", "blocked"]
   return {
     openapi: "3.1.0",
-    info: { title: "TCGPlaytest Partner API", version: "1.0.0", description: `Public /v1 URL-based artwork API: create → poll → redirect. Human setup at ${config.baseUrl}/dashboard is required: sign in, complete the partner application, accept current partner terms and create a key. Keys stay on your server. No certification, affiliate_code, pricing, upload or finalize request fields/endpoints. Customers certify image rights at hosted checkout. This document does not change the API version.` },
+    info: { title: "TCGPlaytest Partner API", version: "1.1.0", description: `Public /v1 artwork API: optional direct upload → create → poll → redirect. Upload to TCGPlaytest-owned storage or supply existing HTTPS image URLs. Human setup at ${config.baseUrl}/dashboard is required: sign in, complete the partner application, accept current partner terms and create a key. Keys stay on your server. Do not send certification, affiliate_code or pricing fields. There is no finalize endpoint. Customers certify image rights at hosted checkout. This document revision does not change the /v1 path version.` },
     servers: [{ url: config.baseUrl, description: "API base for this partner platform deployment; use keys issued by this environment." }],
     externalDocs: { url: `${config.baseUrl}/docs`, description: "Setup, constraints, responsibilities and integration guide" },
     security: [{ PartnerApiKey: [] }],
-    tags: [{ name: "Carts" }, { name: "Orders" }],
+    tags: [{ name: "Uploads" }, { name: "Carts" }, { name: "Orders" }],
     paths: {
+      "/v1/uploads": { post: {
+        operationId: "createUpload", tags: ["Uploads"], summary: "Get a temporary direct-to-TCGPlaytest-storage upload link",
+        description: `Send metadata only with your server-side API key. No partner storage account is needed. Counts toward the shared ${config.rateLimit}/minute/key limit. PUT raw file bytes to upload_url with the returned headers, without the API key or cookies. Wait for a successful 2xx PUT, then use image_url unchanged in a cart front/back field. No finalize call. Links cannot overwrite existing files. Test and live keys are supported; test keys still cannot pay. Upload success is not artwork validation: the cart worker performs all checks. On an uncertain PUT outcome, request a new upload link and retry the file.`,
+        requestBody: { required: true, content: { "application/json": { schema: ref("CreateUpload"), example: { content_type: "image/png", size: 123456 } } } },
+        responses: { "201": { description: "Scoped upload grant; do not log or share the signed URLs.", content: { "application/json": { schema: ref("UploadGrant") } } }, ...errors([400,401,403,413,429,500,503]) },
+      } },
+      "/v1/uploads/source": { get: {
+        operationId: "readUploadedImage", tags: ["Uploads"], summary: "Resolve an API-issued image reference", security: [],
+        description: "Use the returned image_url verbatim in a cart. This capability URL redirects to a short-lived private-storage read link. No bearer API key is sent. Access expires after 8 days and requires the issuing key and partner to remain active. It is not a checkout URL. Partners normally do not need to call this endpoint themselves.",
+        parameters: [{ name: "token", in: "query", required: true, schema: { type: "string", maxLength: 1800 }, description: "Opaque signed capability already included in image_url." }],
+        responses: { "307": { description: "Follow the HTTPS redirect to read the image.", headers: { Location: { schema: { type: "string", format: "uri" } } } }, ...errors([403,404,500]), "410": { description: "upload_expired: request a fresh upload grant and upload again.", content: { "application/json": { schema: ref("ApiError") } } } },
+      } },
       "/v1/carts": { post: {
         operationId: "createCart", tags: ["Carts"], summary: "Queue URL validation and create a cart",
         description: `Returns 202 immediately while a separate worker checks artwork; no checkout_url until open. Request JSON is limited to 512,000 bytes. Maximum ${config.maxCards} items AND ${config.maxCards} total copies. Downloads allow 20 MiB/file, 40 MP, minimum ${config.minWidth}×${config.minHeight}, 3 redirects and a 15-second total deadline per URL attempt. Identical retries with the same key return the original cart (202 validating; 200 otherwise). A failed cart requires corrected inputs and a new Idempotency-Key, not a new API key. Default deployment cart lifetime: ${config.expiryHours} hours from creation.`,
@@ -123,6 +135,14 @@ export function buildOpenApi(config = documentationConfig()) {
     components: {
       securitySchemes: { PartnerApiKey: { type: "http", scheme: "bearer", bearerFormat: "tcgp_test_<64 lowercase hex> or tcgp_live_<64 lowercase hex>", description: "Server-side key created in the dashboard. Test/live data are isolated. Rotating revokes the previous key for that mode." } },
       schemas: {
+        CreateUpload: object({ content_type: { type: "string", enum: ["image/png", "image/jpeg"] }, size: { type: "integer", minimum: 1, maximum: 20971520, description: "Exact file byte count; storage and the validation worker enforce the 20 MiB maximum independently." } }),
+        UploadGrant: object({
+          upload_url: { type: "string", format: "uri", description: "Temporary storage URL. PUT the raw file here, never multipart or JSON. Valid for 2 hours; upload once, no overwrite." },
+          method: { type: "string", const: "PUT" }, headers: object({ "Content-Type": { type: "string", enum: ["image/png", "image/jpeg"] } }),
+          image_url: { type: "string", format: "uri", description: "Opaque image reference to use unchanged in image_url/back_image_url after PUT succeeds. Bound to partner and key mode." },
+          upload_expires_at: timestamp, expires_at: { ...timestamp, description: "Source-reference expiry, 8 days after grant creation. Create the cart promptly. Staging objects are removed by maintenance after expiry (normally within the following day); validated cart files follow normal cart/order retention." },
+          max_bytes: { type: "integer", const: 20971520 },
+        }),
         CreateCart: {
           ...object({
             items: { type: "array", minItems: 1, maxItems: config.maxCards, items: ref("CartItem") },
@@ -163,7 +183,7 @@ export function buildOpenApi(config = documentationConfig()) {
 export function buildLlmsText(config = documentationConfig()) {
   return `# TCGPlaytest Partner API
 
-> Server-side card manufacturing integration. Submit image URLs, poll validation, then redirect the customer to hosted checkout.
+> Server-side card manufacturing integration. Upload directly to TCGPlaytest storage or supply existing image URLs, poll validation, then redirect the customer to hosted checkout.
 
 API base URL: ${config.baseUrl}
 API path version: /v1. OpenAPI document revision is not a new API path version.
@@ -176,13 +196,15 @@ API path version: /v1. OpenAPI document revision is not a new API path version.
 
 ## Contract
 - Authorization: Bearer <server-side partner API key>. Never put the key in browser/widget code.
+- Optional POST /v1/uploads with {content_type: "image/png" or "image/jpeg", size: file byte count} returns 201 {upload_url, method: "PUT", headers: {"Content-Type": ...}, image_url, upload_expires_at, expires_at, max_bytes: 20971520}. No partner Blob/Supabase account or hosting is needed. PUT raw bytes to upload_url with only the returned headers, no API key/cookies. Upload link lasts 2 hours and cannot overwrite. After successful PUT, use image_url unchanged in the existing cart fields; no finalize call. Upload authorization uses the shared write rate limit; honor Retry-After. A failed/uncertain PUT can be retried with a fresh grant. The cart worker still performs all validation.
+- image_url is a private signed capability, scoped to the partner and key mode and valid for 8 days; do not log/share it. Create the cart promptly. Issuing key revocation disables source access. Source staging files are removed by maintenance after expiry (normally within the following day). Validated cart files follow the retention rules below. Test keys support uploads but cannot pay.
 - POST /v1/carts requires Idempotency-Key: 1–200 visible ASCII characters, no spaces. Body: items with image_url, quantity and item/shared back_image_url; optional hashes, external_ref, return_url and standard card_stock only.
 - Do not send certification, affiliate_code, prices or partner-terms fields. Terms version and saved affiliate preference are copied by the server. The customer certifies image rights at checkout; the partner still has the obligations above.
 - New POST returns 202, status validating, no checkout_url. GET /v1/carts/{id} every 3–5 seconds; honor Retry-After. Polling is authenticated but exempt from the ${config.rateLimit}/minute/key write/order limit.
 - Redirect only for open, using checkout_url verbatim. For failed, inspect every errors entry (item_index is zero-based; side, code, message), fix inputs and create a new cart with a new Idempotency-Key. Do not rotate the API key. Other terminal states: converted, expired, blocked, cancelled.
 - Maximum ${config.maxCards} items AND ${config.maxCards} total quantity; JSON body ≤512,000 bytes; external_ref ≤200 UTF-16 code units; HTTPS URLs ≤2048 UTF-16 code units.
 - Artwork: public IPv4 HTTPS, PNG/JPEG single frame, ≤20 MiB, ≤40,000,000 pixels, at least ${config.minWidth}×${config.minHeight}. At most 3 redirects. Total download deadline 15 seconds per URL attempt, including DNS/TLS/redirects/body. Private/local addresses are blocked.
-- Optional SHA-256 is 64 hex characters over exact file bytes; a mismatch fails that item/side. Each URL is checked within its cart; files are never reused across carts. No source downloads after payment. No upload or finalize endpoints.
+- Optional SHA-256 is 64 hex characters over exact file bytes; a mismatch fails that item/side. Each URL is checked within its cart; validated files are never reused across carts. No source downloads after payment. Existing public HTTPS URL integrations continue to work; direct uploads are optional. There is no finalize endpoint.
 - Current deployment: cart lifetime ${config.expiryHours} hours from creation; retention ${config.retentionDays} days after shipment/cancellation, subject to reconciliation and legal holds. expires_at is authoritative; all timestamp strings use RFC 3339 with timezone.
 - GET /v1/orders/{id} uses cart.order_id or an order webhook data.id. It returns id, cart_id, status, shipment, created_at, updated_at, external_ref and card_count. Browser return is not proof of payment.
 - Webhooks: order.paid, order.in_production, order.shipped, order.cancelled, cart.expired. Envelope: id, type, created_at, data. Deduplicate by top-level id. Verify TCGP-Signature (t=Unix seconds,v1=hex HMAC-SHA256) over timestamp + "." + exact raw body, with the signing secret, constant-time comparison and ±300-second tolerance. Respond 2xx after durable receipt. Up to 12 attempts; no delivery-order guarantee.

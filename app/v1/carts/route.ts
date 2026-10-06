@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { api, authenticate, checked, digest, json, publicCart, secret } from "@/lib/partner-api"
 import { ApiError, partnerReturnUrl, validateCart } from "@/lib/manufacturing-contract"
+import { assertUploadOwner } from "@/lib/partner-uploads"
 
 export const runtime = "nodejs"
 export async function POST(request: Request) { return api(async () => {
@@ -18,6 +19,10 @@ export async function POST(request: Request) { return api(async () => {
     const legacyRequestHash = digest(JSON.stringify({ ...body, certification: null }))
     if (existing.request_hash !== requestHash && existing.request_hash !== legacyRequestHash) throw new ApiError(409, "idempotency_conflict", "That key was used with different manufacturing instructions")
     return NextResponse.json(publicCart(existing), { status: existing.status === "validating" ? 202 : 200, headers: { "Cache-Control": "no-store", "Retry-After": "3" } })
+  }
+  for (const item of body.items) {
+    assertUploadOwner(item.image_url, key)
+    assertUploadOwner(item.back_image_url, key)
   }
   const origin = key.mode === "test" ? new URL(request.url).origin : process.env.TCGPLAYTEST_CHECKOUT_ORIGIN
   if (!origin) throw new ApiError(503, "checkout_unavailable", "Live checkout is not configured")

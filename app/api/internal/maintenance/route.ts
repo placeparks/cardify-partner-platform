@@ -5,6 +5,7 @@ import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { safeRequest } from "@/lib/safe-download"
 import { decrypt } from "@/lib/webhook-secrets"
 import { deliverWelcomeEmail } from "@/lib/partner-welcome"
+import { cleanupUploads } from "@/lib/partner-uploads"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -53,5 +54,9 @@ async function maintain() {
     if (delivered) result.delivered++
   }
   checked(await db.from("partner_api_rate_windows").delete().lt("window_at",new Date(Date.now()-86400_000).toISOString()))
-  return NextResponse.json(result)
+  let uploadsDeleted = 0
+  if (Date.now() - started < 45000) {
+    try { uploadsDeleted = await cleanupUploads(started + 50000) } catch { result.failures++ }
+  }
+  return NextResponse.json({ ...result, uploadsDeleted })
 }
