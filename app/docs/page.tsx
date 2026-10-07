@@ -105,7 +105,7 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
 // Tell YOUR server the upload finished. It checks ownership, then puts
 // grant.image_url into items[].image_url or back_image_url in POST /v1/carts.
 // Upload every required front/back before creating the cart. No finalize call.`}</Code>
-      <p>For multiple files, reuse the same uploaded image URL wherever that image repeats, including shared backs. You can upload different files concurrently with a small limit, such as three transfers at a time. Upload-grant requests still share the API rate limit; respect <code>Retry-After</code> and create the cart only after every required upload succeeds. Validation is queued, so finishing the upload does not immediately open checkout.</p>
+      <p>For multiple files, reuse the same uploaded image URL wherever that image repeats, including shared backs. You can upload different files concurrently with a small limit, such as three transfers at a time. Upload-grant requests still share the API rate limit; respect <code>Retry-After</code> and create the cart only after every required upload succeeds. New carts start background validation after the cart response, with a scheduled worker for recovery. Continue polling until the cart is open; upload success alone does not open checkout.</p>
       <Fields label="Direct upload rules" rows={[
         ["POST /v1/uploads body", 'Only content_type ("image/png" or "image/jpeg") and size (integer 1–20,971,520 bytes). Metadata only.'],
         ["upload_url / method / headers", "PUT raw file bytes using the returned headers. No partner API key, storage account credentials or cookies are sent to storage. Browser uploads bypass the application server's body-size limit."],
