@@ -9,12 +9,14 @@ export default function DashboardPage() {
   const [accepted,setAccepted] = useState(false), [credential,setCredential] = useState("")
   const [webhook,setWebhook] = useState(""), [mode,setMode] = useState("test")
   const [widgetCopied, setWidgetCopied] = useState(false)
+  const [widgetOrigins, setWidgetOrigins] = useState("")
   const [affiliateChoice, setAffiliateChoice] = useState<boolean | undefined>(undefined)
   const [affiliatePending, setAffiliatePending] = useState(true)
   async function load() {
     const response = await fetch("/api/partnership/me",{cache:"no-store"});const data=await response.json()
     if (!response.ok && response.status!==401) throw new Error(data.error || "Dashboard unavailable")
     setState({...data,status:response.status})
+    setWidgetOrigins((data.partner?.widget_allowed_origins || []).join("\n"))
   }
   useEffect(()=>{load().catch(e=>setError(e.message))},[])
   const welcomePartnerId = state?.partner?.status === "approved" && !state.partner.api_blocked_at &&
@@ -43,7 +45,7 @@ export default function DashboardPage() {
     {error&&<p className="border border-red-400 p-4 text-red-200" role="alert">{error}</p>}
     {partner.status!=="approved"?<p className="glass-panel p-4 sm:p-6">{partner.status === "declined" ? "Your application was declined. Contact TCGPlaytest for help with your application." : "Automatic activation is unavailable. Contact TCGPlaytest to complete your account setup."}</p>:partner.api_blocked_at?<p className="glass-panel p-4 sm:p-6">Widget and API access are revoked. Contact TCGPlaytest about your account review.</p>:<>
       <p className="text-slate-300">Set up your API integration and checkout widget below.</p>
-      <div className="grid gap-4 sm:grid-cols-2">{[["API carts",state.apiMetrics?.carts||0],["Manufacturing orders",state.apiMetrics?.orders||0]].map(([label,value])=><div className="glass-panel p-5" key={label}><p className="text-sm text-slate-300">{label}</p><p className="mt-2 break-all text-2xl font-bold text-[#00ff9d]">{value}</p></div>)}</div>
+      <div className="grid gap-4 sm:grid-cols-2">{[["API + widget carts",state.apiMetrics?.carts||0],["Manufacturing orders",state.apiMetrics?.orders||0]].map(([label,value])=><div className="glass-panel p-5" key={label}><p className="text-sm text-slate-300">{label}</p><p className="mt-2 break-all text-2xl font-bold text-[#00ff9d]">{value}</p></div>)}</div>
       <section className="glass-panel space-y-5 p-4 sm:p-6">
         <h2 className="text-2xl font-bold">Partner terms</h2>
         <p className="leading-7 text-slate-300">{PARTNER_TERMS_STATEMENT}</p>
@@ -56,11 +58,18 @@ export default function DashboardPage() {
       <section className="glass-panel space-y-5 p-4 sm:p-6"><h2 className="text-2xl font-bold">1. Server-side API keys</h2><p className="text-slate-300">Test carts cannot be charged, printed, or shipped. Keys are shown once; rotating a key immediately revokes the previous key for that mode.</p><AffiliatePreference disabled={busy} onChange={setAffiliateChoice} onPending={setAffiliatePending} /><div className="grid gap-4 sm:grid-cols-2">{["test","live"].map(m=><div className="border border-white/10 p-4" key={m}><h3 className="font-bold capitalize">{m} key</h3><p className="my-3 font-mono text-sm">{state.apiKeys?.find((k:any)=>k.mode===m)?.key_prefix?`${state.apiKeys.find((k:any)=>k.mode===m).key_prefix}…`:"Not created"}</p><button className="button-primary" disabled={!termsAccepted||busy||affiliatePending} onClick={()=>action("/api/partnership/keys",{mode:m,...(affiliateChoice !== undefined ? {use_affiliate:affiliateChoice} : {})})}>Create / rotate {m} key</button></div>)}</div></section>
       {credential&&<section className="border border-emerald-400 bg-emerald-950 p-5" role="status"><p>Save this secret on your server now. It will not be shown again.</p><pre className="my-4 whitespace-pre-wrap break-all">{credential}</pre><button className="button-secondary" onClick={()=>navigator.clipboard.writeText(credential).catch(()=>setError("Copy failed; select the secret manually."))}>Copy secret</button><button className="ml-4" onClick={()=>setCredential("")}>Hide</button></section>}
       <section className="glass-panel space-y-4 p-4 sm:p-6"><h2 className="text-2xl font-bold">2. Order webhooks</h2><p>Use an HTTPS endpoint on your registered website. Saving rotates its signing secret.</p><form className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]" onSubmit={e=>{e.preventDefault();action("/api/partnership/webhook",{mode,url:webhook})}}><select aria-label="Webhook environment" className="input-recessed w-full p-3" value={mode} onChange={e=>setMode(e.target.value)}><option value="test">Test</option><option value="live">Live</option></select><input aria-label="Webhook URL" className="input-recessed w-full min-w-0 p-3" type="url" required placeholder="https://your-site.com/webhooks/tcgplaytest" value={webhook} onChange={e=>setWebhook(e.target.value)}/><button className="button-secondary" disabled={busy}>Save webhook</button></form></section>
-      <section className="glass-panel p-4 sm:p-6"><h2 className="text-2xl font-bold">Build your integration</h2><p className="my-4 leading-7">Upload files directly to TCGPlaytest storage using temporary API links, or supply existing HTTPS image URLs. Your server submits the front/back references and quantities, then checks the cart status. Once the artwork passes validation, customers continue to checkout, accept image rights, and pay.</p><Link className="button-primary" href="/docs">API documentation and example</Link></section>
+      <section className="glass-panel p-4 sm:p-6"><h2 className="text-2xl font-bold">Build your integration</h2><p className="my-4 leading-7">Your server submits front and back image URLs and quantities, then checks the cart status. Once the artwork passes validation, customers continue to checkout, accept image rights, and pay.</p><Link className="button-primary" href="/docs">API documentation and example</Link></section>
       <section className="glass-panel space-y-4 p-4 sm:p-6">
         <h2 className="text-2xl font-bold">3. Add TCGPlaytest to your website</h2>
         <p>Add a “Print with TCGPlaytest” button to your store. Customers choose their cards on your website, then continue to TCGPlaytest to pay for printing and delivery.</p>
-        <p className="text-slate-300">First, connect <code>/api/tcgplaytest/cart</code> on your server using the <Link href="/docs#widget" className="text-cyan-300 underline">setup guide</Link>. Your server requests direct upload links or supplies existing artwork URLs, and provides cart creation and status routes. No partner storage account is needed. Then paste this script into your website. Keep your API key on your server.</p>
+        <p className="text-slate-300">Copy your personalized snippet and connect your editor&apos;s finished front/back images using the <Link href="/docs#widget" className="text-cyan-300 underline">setup guide</Link>. TCGPlaytest handles storage, validation and checkout. No secret API key or server cart endpoint is required for the widget.</p>
+        <p className="text-sm text-slate-300">Your public partner code identifies your business. The saved affiliate preference applies to widget orders too. The registered website is allowed automatically: <span className="break-all">{partner.website_url}</span></p>
+        <form className="space-y-3" onSubmit={e=>{e.preventDefault();action("/api/partnership/widget",{origins:widgetOrigins.split(/\s+/).filter(Boolean)})}}>
+          <label className="block" htmlFor="widget-origins">Additional widget websites (one HTTPS origin per line)</label>
+          <textarea id="widget-origins" className="input-recessed w-full min-w-0 p-3" rows={3} placeholder="https://your-shop.vercel.app" value={widgetOrigins} onChange={e=>setWidgetOrigins(e.target.value)}/>
+          <button className="button-secondary" disabled={busy}>Save widget websites</button>
+        </form>
+        {!termsAccepted && <p>Accept the partner terms above to unlock your personalized snippet.</p>}
         {partner.widgetCode && <><pre className="overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-4 text-sm text-emerald-300">{partner.widgetCode}</pre>
           <button className="button-primary" onClick={async()=>{try{await navigator.clipboard.writeText(partner.widgetCode);setWidgetCopied(true)}catch{setError("Copy failed; select the widget code manually.")}}}>{widgetCopied ? "Widget code copied" : "Copy widget code"}</button></>}
         <Link className="flex min-h-11 w-fit items-center text-cyan-300 underline" href="/docs#widget">Widget setup guide</Link>
