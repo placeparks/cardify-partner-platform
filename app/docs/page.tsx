@@ -70,10 +70,11 @@ if (!statusResponse.ok) throw new Error(status.error.message);
     <h2 className="text-2xl font-bold">Create → poll → redirect</h2>
     <ol className="list-decimal space-y-3 pl-6">
       <li><code>POST /v1/carts</code> returns <strong>202 Accepted</strong>, <code>status: validating</code>, and no checkout URL.</li>
-      <li>A separate background worker downloads and checks the files. Poll <code>GET /v1/carts/&#123;id&#125;</code> every 3–5 seconds, honoring <code>Retry-After</code>. Progress may remain unchanged while a job waits for the worker.</li>
+      <li>A separate background worker downloads, checks and applies automatic print bleed to both fronts and backs. Poll <code>GET /v1/carts/&#123;id&#125;</code> every 3–5 seconds, honoring <code>Retry-After</code>. Progress may remain unchanged while a job waits for the worker.</li>
       <li>When <code>status</code> is <code>open</code>, redirect to <code>checkout_url</code>. The customer accepts image rights and pays at TCGPlaytest checkout.</li>
       <li>Confirm payment from a signed <code>order.paid</code> webhook or the order API. TCGPlaytest prints from the already-checked files; payment does not trigger another source download.</li>
     </ol>
+    <p><strong>Automatic bleed is handled by the API.</strong> Submit finished-card artwork; partners do not need to add bleed. Before checkout opens, TCGPlaytest applies the website’s standard 2 mm auto-bleed around a 63 × 88 mm finished card, using the same mask and corner treatment. Recognized artwork with existing bleed is preserved at 2 mm or cropped from 3 mm to 2 mm, without adding a second margin. A 1500 × 2100 image becomes 1596 × 2196 pixels. The dashboard and production use the prepared file. Optional SHA-256 values must still describe the original submitted bytes. Both source and prepared files remain private, scoped to that cart, and follow its expiry/retention and legal holds.</p>
     <p>Send <code>Authorization: Bearer &lt;your API key&gt;</code> on server-side upload-grant, cart and order API requests, and <code>Content-Type: application/json</code> on POST. Never expose keys in browser code or the widget. Signed storage PUTs and image-reference reads use their temporary URL capability instead, without a bearer key. Cart and order reads are scoped to the partner and key mode.</p>
 
     <section id="uploads" className="scroll-mt-24 space-y-4">
