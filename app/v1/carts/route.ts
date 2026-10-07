@@ -3,8 +3,10 @@ import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { api, authenticate, checked, digest, json, publicCart, secret } from "@/lib/partner-api"
 import { ApiError, partnerReturnUrl, validateCart } from "@/lib/manufacturing-contract"
 import { assertUploadOwner } from "@/lib/partner-uploads"
+import { scheduleCartValidation } from "@/lib/validation-dispatch"
 
 export const runtime = "nodejs"
+export const maxDuration = 300
 export async function POST(request: Request) { return api(async () => {
   const key = await authenticate(request)
   if (key.mode === "live" && (process.env.PARTNER_LIVE_ENABLED !== "true" || !(Number(process.env.PARTNER_MIN_IMAGE_WIDTH)>0) || !(Number(process.env.PARTNER_MIN_IMAGE_HEIGHT)>0))) throw new ApiError(503,"live_not_enabled","Live handoff awaits production configuration")
@@ -47,6 +49,8 @@ export async function POST(request: Request) { return api(async () => {
   const result = checked(await db.rpc("partner_create_cart", { p_cart: cart, p_files: files }))
   if (result.conflict) throw new ApiError(409, "idempotency_conflict", "That key was used with different manufacturing instructions")
   if (result.blocked) throw new ApiError(403, "content_blocked", "A submitted file is blocked")
-  // The transaction queues URLs. Only the separately scheduled worker downloads them.
+  // Return 202 immediately, then run the leased queue worker after the response.
+  // Comparing IDs also prevents concurrent idempotent POSTs starting extra runs.
+  scheduleCartValidation(result, id)
   return NextResponse.json(publicCart(result), { status: result.status === "validating" ? 202 : 200, headers: { "Cache-Control": "no-store", "Retry-After": "3" } })
 }) }
