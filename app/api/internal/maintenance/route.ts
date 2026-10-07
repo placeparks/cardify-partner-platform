@@ -34,8 +34,9 @@ async function maintain() {
   const due = checked(await db.rpc("partner_claim_cleanup")) || []
   for (const file of due) {
     if (Date.now()-started>40000) break
-    if (file.storage_path) checked(await db.storage.from("partner-artwork").remove([file.storage_path]))
-    checked(await db.from("partner_artwork").update({state:"deleted",source_url:null,storage_path:null,deleted_at:now}).eq("id",file.id).eq("legal_hold",false))
+    const paths=[...new Set<string>([file.storage_path,file.print_storage_path].filter(Boolean))]
+    if (paths.length) checked(await db.storage.from("partner-artwork").remove(paths))
+    checked(await db.from("partner_artwork").update({state:"deleted",source_url:null,storage_path:null,print_storage_path:null,deleted_at:now}).eq("id",file.id).eq("legal_hold",false))
     result.deleted++
   }
   const events = checked(await db.from("partner_webhook_events").select("*").is("delivered_at",null).lte("next_attempt_at",now).lt("attempts",12).limit(10)) || []
