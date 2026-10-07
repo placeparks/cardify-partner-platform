@@ -266,25 +266,47 @@
           var blob = typeof value === "function" ? await value() : value;
           if (!(blob instanceof Blob) || ["image/png", "image/jpeg"].indexOf(blob.type) === -1 || !blob.size || blob.size > 20 * 1024 * 1024) throw new Error("Use PNG/JPEG images up to 20 MiB.");
           if (attempt.blobs.has(blob)) return attempt.blobs.get(blob);
-          var image = await createImageBitmap(blob);
-          var tooBig = image.width * image.height > 40000000; image.close();
-          if (tooBig) throw new Error("Images must be no larger than 40 megapixels.");
-          var grant = await widgetRequest("uploads", "POST", { request_id: crypto.randomUUID(), content_type: blob.type, size: blob.size }, attempt.token);
-          var url = new URL(grant.upload_url);
-          if (url.protocol !== "https:" || url.username || url.password || grant.method !== "PUT") throw new Error("The service returned an invalid upload link.");
-          var uploaded = await fetch(url.href, { method: "PUT", headers: { "Content-Type": blob.type }, body: blob, credentials: "omit", redirect: "error", signal: AbortSignal.timeout(120000) });
-          if (!uploaded.ok) throw new Error("Image upload failed. Please retry checkout.");
-          attempt.blobs.set(blob, grant.id);
-          return grant.id;
+          // Cache the in-flight promise too: concurrent designs share one back upload.
+          var pending = (async function () {
+            var image = await createImageBitmap(blob);
+            var tooBig = image.width * image.height > 40000000; image.close();
+            if (tooBig) throw new Error("Images must be no larger than 40 megapixels.");
+            var grant = await widgetRequest("uploads", "POST", { request_id: crypto.randomUUID(), content_type: blob.type, size: blob.size }, attempt.token);
+            var url = new URL(grant.upload_url);
+            if (url.protocol !== "https:" || url.username || url.password || grant.method !== "PUT") throw new Error("The service returned an invalid upload link.");
+            var uploaded = await fetch(url.href, { method: "PUT", headers: { "Content-Type": blob.type }, body: blob, credentials: "omit", redirect: "error", signal: AbortSignal.timeout(120000) });
+            if (!uploaded.ok) throw new Error("Image upload failed. Please retry checkout.");
+            return grant.id;
+          })();
+          attempt.blobs.set(blob, pending);
+          try { return await pending; }
+          catch (error) {
+            // Retry only a failed transfer. Successful and in-flight images stay reusable.
+            if (attempt.blobs.get(blob) === pending) attempt.blobs.delete(blob);
+            throw error;
+          }
         }
-        for (var i = 0; i < attempt.items.length; i++) {
-          if (attempt.uploaded[i] && attempt.uploaded[i].front_upload_id && attempt.uploaded[i].back_upload_id) continue;
-          progress("Uploading design " + (i + 1) + " of " + attempt.items.length + "…");
-          var item = attempt.items[i];
-          var partial = attempt.uploaded[i] || (attempt.uploaded[i] = { quantity: item.quantity });
-          if (!partial.front_upload_id) partial.front_upload_id = await upload(item.front);
-          if (!partial.back_upload_id) partial.back_upload_id = await upload(item.back);
+        var nextItem = 0, uploadError = null;
+        var completed = attempt.uploaded.filter(function (item) { return item && item.front_upload_id && item.back_upload_id; }).length;
+        progress("Uploaded " + completed + " of " + attempt.items.length + " designs…");
+        async function uploadWorker() {
+          while (!uploadError && nextItem < attempt.items.length) {
+            var i = nextItem++, item = attempt.items[i];
+            var partial = attempt.uploaded[i] || (attempt.uploaded[i] = { quantity: item.quantity });
+            if (partial.front_upload_id && partial.back_upload_id) continue;
+            try {
+              if (!partial.front_upload_id) partial.front_upload_id = await upload(item.front);
+              if (uploadError) return;
+              if (!partial.back_upload_id) partial.back_upload_id = await upload(item.back);
+              completed++;
+              progress("Uploaded " + completed + " of " + attempt.items.length + " designs…");
+            } catch (error) { uploadError = uploadError || error; }
+          }
         }
+        // Each worker has at most one transfer in flight. Drain all three before
+        // allowing a retry/reset so a failed upload cannot race the next attempt.
+        await Promise.all([uploadWorker(), uploadWorker(), uploadWorker()]);
+        if (uploadError) throw uploadError;
         attempt.payload = { items: attempt.uploaded };
         if (attempt.externalRef) attempt.payload.external_ref = attempt.externalRef;
         saveAttempt();
