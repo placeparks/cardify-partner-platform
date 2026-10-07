@@ -26,8 +26,8 @@ async function storeCheckedFile(path: string, bytes: Buffer, file: {sha256:strin
   }
 }
 
-// Only a separately scheduled queue worker calls this. No downloads in cart,
-// checkout, payment or print handlers. URL deduplication is scoped to one cart.
+// Called after a new cart response and by the scheduled recovery worker.
+// Cart responses never wait for downloads. URL deduplication is cart-scoped.
 export async function validateQueuedArtwork(deadline=Date.now()+40000) {
   const result={checked:0,failures:0}
   let stopped=false
