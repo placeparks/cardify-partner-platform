@@ -9,14 +9,44 @@ export const PRINT_PROCESSING_VERSION = "auto-bleed-2mm-v1"
 const BLEED_SIZE_TOLERANCE_PX = 10
 const yieldFrame = () => new Promise<void>(resolve => setImmediate(resolve))
 let maskPromise: Promise<Buffer> | undefined
+// Cache only the public template, never customer artwork. Share in-flight
+// resizes too; common front/back dimensions recur throughout a cart.
+const MASK_CACHE_BYTES = 32 * 1024 * 1024
+const masks = new Map<string, { bytes: number; pending: Promise<{ data: Buffer }> }>()
+let maskCacheBytes = 0
 function maskBytes() {
   return maskPromise ||= readFile(join(process.cwd(), "lib", "assets", "autobleed-mask.png"))
     .catch(error => { maskPromise = undefined; throw error })
 }
-async function maskAt(width: number, height: number) {
-  const red = await sharp(await maskBytes()).resize(width, height, { fit: "fill", kernel: "cubic" }).extractChannel(0).raw().toBuffer()
-  // One mask byte per pixel keeps peak memory bounded for large print files.
-  return { data: red }
+function maskAt(width: number, height: number) {
+  const key = `${width}x${height}`, bytes = width * height
+  const cached = masks.get(key)
+  if (cached) {
+    masks.delete(key)
+    masks.set(key, cached)
+    return cached.pending
+  }
+  const pending = maskBytes().then(async template => ({
+    data: await sharp(template).resize(width, height, { fit: "fill", kernel: "cubic" }).extractChannel(0).raw().toBuffer(),
+  }))
+  // One byte per pixel, with a fixed memory budget and at most eight sizes.
+  // Oversized masks still work but are released after the current operation.
+  if (bytes > MASK_CACHE_BYTES) return pending
+  while (masks.size && (maskCacheBytes + bytes > MASK_CACHE_BYTES || masks.size >= 8)) {
+    const oldestKey = masks.keys().next().value!
+    maskCacheBytes -= masks.get(oldestKey)!.bytes
+    masks.delete(oldestKey)
+  }
+  const entry = { bytes, pending }
+  masks.set(key, entry)
+  maskCacheBytes += bytes
+  pending.catch(() => {
+    if (masks.get(key) === entry) {
+      masks.delete(key)
+      maskCacheBytes -= bytes
+    }
+  })
+  return pending
 }
 
 export function detectExistingBleed(width: number, height: number): boolean {
@@ -190,16 +220,25 @@ export async function preparePrintArtwork(bytes: Buffer) {
   const { data } = await sharp(bytes).toColourspace("srgb").ensureAlpha().raw().toBuffer({ resolveWithObject: true })
   await extrudeMaskedPixels({ data }, await maskAt(width, height), width, height)
   const output = Buffer.alloc(outWidth * outHeight * 4)
-  // Extend the prepared edges without resizing the center artwork.
-  for (let y = 0; y < outHeight; y++) {
-    const sy = Math.min(Math.max(y - bleedY, 0), height - 1)
-    for (let x = 0; x < outWidth; x++) {
-      const sx = Math.min(Math.max(x - bleedX, 0), width - 1)
-      const from = (sy * width + sx) * 4, to = (y * outWidth + x) * 4
-      output[to] = data[from]; output[to + 1] = data[from + 1]; output[to + 2] = data[from + 2]; output[to + 3] = 255
-    }
-    // Preserve center alpha exactly as the site's canvas draw does.
-    if (y >= bleedY && y < height + bleedY) data.copy(output, (y * outWidth + bleedX) * 4, sy * width * 4, (sy + 1) * width * 4)
+  // Native row copies avoid a JS loop over every center pixel. Only the
+  // extended edge pixels become opaque; preserve center RGBA exactly.
+  const rowBytes = outWidth * 4, sourceRowBytes = width * 4, edgeBytes = bleedX * 4
+  const edge = Buffer.alloc(4, 255)
+  for (let y = 0; y < height; y++) {
+    const sourceRow = y * sourceRowBytes, targetRow = (y + bleedY) * rowBytes
+    data.copy(output, targetRow + edgeBytes, sourceRow, sourceRow + sourceRowBytes)
+    data.copy(edge, 0, sourceRow, sourceRow + 3)
+    output.fill(edge, targetRow, targetRow + edgeBytes)
+    data.copy(edge, 0, sourceRow + sourceRowBytes - 4, sourceRow + sourceRowBytes - 1)
+    output.fill(edge, targetRow + edgeBytes + sourceRowBytes, targetRow + rowBytes)
+  }
+  const top = Buffer.from(output.subarray(bleedY * rowBytes, (bleedY + 1) * rowBytes))
+  const bottomStart = (bleedY + height - 1) * rowBytes
+  const bottom = Buffer.from(output.subarray(bottomStart, bottomStart + rowBytes))
+  for (let i = 3; i < rowBytes; i += 4) { top[i] = 255; bottom[i] = 255 }
+  for (let y = 0; y < bleedY; y++) {
+    top.copy(output, y * rowBytes)
+    bottom.copy(output, (height + bleedY + y) * rowBytes)
   }
   patchCorners({ data: output }, outWidth, outHeight, Math.max(1, Math.round(2.5 * (width / 63 + height / 88) / 2)))
   await extrudeMaskedPixels({ data: output }, await maskAt(outWidth, outHeight), outWidth, outHeight)
