@@ -11,7 +11,7 @@ export async function POST(request: Request) { return api(async () => {
   const current = checked(await db.from("partner_manufacturing_orders").select("status,shipment,partner:partnership_requests(api_blocked_at)").eq("id",order.id).single())
   if (!current) throw new ApiError(404,"not_found","Manufacturing order not found")
   const files = checked(await db.from("partner_artwork").select("*").eq("cart_id",order.cart_id).order("item_index")) || []
-  const hashes = files.flatMap((f:any)=>[f.actual_sha256,f.expected_sha256]).filter(Boolean)
+  const hashes = files.flatMap((f:any)=>[f.actual_sha256,f.expected_sha256,f.print_sha256]).filter(Boolean)
   const blocks = hashes.length ? checked(await db.from("partner_content_blocks").select("sha256").in("sha256",hashes)) || [] : []
   const available = ["paid","in_production"].includes(current.status) && !(current.partner as any)?.api_blocked_at && !blocks.length
   const ready = available && files.length > 0 && files.every((f:any)=>["stored","processed"].includes(f.state) && f.storage_path)
@@ -23,8 +23,8 @@ export async function POST(request: Request) { return api(async () => {
   if (!selected.length) throw new ApiError(404,"not_found","File does not belong to this order")
   const manifest = []
   for (const file of selected) {
-    const signed = checked(await db.storage.from("partner-artwork").createSignedUrl(file.storage_path,60))
-    manifest.push({id:file.id,item_index:file.item_index,side:file.side,quantity:file.quantity,sha256:file.actual_sha256,url:signed!.signedUrl})
+    const signed = checked(await db.storage.from("partner-artwork").createSignedUrl(file.print_storage_path || file.storage_path,60))
+    manifest.push({id:file.id,item_index:file.item_index,side:file.side,quantity:file.quantity,sha256:file.print_sha256 || file.actual_sha256,url:signed!.signedUrl})
   }
   checked(await db.from("partner_audit_events").insert({partner_id:order.partner_id,entity_type:"production",entity_id:order.id,action:"files_accessed",actor:typeof body.actor === "string" ? body.actor.slice(0,150) : "production_service",details:{file_ids:selected.map((f:any)=>f.id)}}))
   return NextResponse.json({order_id:order.id,files:manifest},{headers:{"Cache-Control":"no-store"}})

@@ -15,7 +15,8 @@
     "lucide-react": "^0.454.0",
     "next": "15.2.8",
     "react": "^19",
-    "react-dom": "^19"
+    "react-dom": "^19",
+    "sharp": "0.33.5"
   },
   "devDependencies": {
     "@types/node": "^22",
