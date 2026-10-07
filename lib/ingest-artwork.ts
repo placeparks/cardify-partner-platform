@@ -54,19 +54,32 @@ export async function validateQueuedArtwork(deadline=Date.now()+40000) {
           const blocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",file.sha256))||[]
           if (blocked.length) throw new ApiError(422,"content_blocked","Artwork blocked")
           const path=`carts/${job.cart_id}/${file.sha256}`
-          await storeCheckedFile(path,bytes,file)
           // Keep the source hash for optional client SHA verification and takedowns.
           // The separately tracked output is what the dashboard and production read.
-          let printBytes:Buffer|undefined
-          if (job.print_version===PRINT_PROCESSING_VERSION && job.print_storage_path && job.print_sha256) {
-            const saved=await db.storage.from("partner-artwork").download(job.print_storage_path)
-            if (saved.data) {
-              const candidate=Buffer.from(await saved.data.arrayBuffer())
-              if (digest(candidate)===job.print_sha256) printBytes=candidate
-            }
-          }
-          printBytes ||= await preparePrintArtwork(bytes)
-          const printFile=await preflight(printBytes)
+          const sourceBytes=bytes
+          // Drain both operations before finishing/retrying the lease, even if
+          // either fails. Storage can run while the CPU prepares the bleed.
+          const [stored,prepared]=await Promise.allSettled([
+            storeCheckedFile(path,sourceBytes,file),
+            (async()=>{
+              let printBytes:Buffer|undefined
+              if (job.print_version===PRINT_PROCESSING_VERSION && job.print_storage_path && job.print_sha256) {
+                const saved=await db.storage.from("partner-artwork").download(job.print_storage_path)
+                if (saved.data) {
+                  const candidate=Buffer.from(await saved.data.arrayBuffer())
+                  if (digest(candidate)===job.print_sha256) printBytes=candidate
+                }
+              }
+              printBytes ||= await preparePrintArtwork(sourceBytes)
+              // Existing 2 mm artwork is returned unchanged, so its exact bytes
+              // have already passed full decoding, size, format and hash checks.
+              const printFile=printBytes===sourceBytes?file:await preflight(printBytes)
+              return {printBytes,printFile}
+            })(),
+          ])
+          if (stored.status==="rejected") throw stored.reason
+          if (prepared.status==="rejected") throw prepared.reason
+          const {printBytes,printFile}=prepared.value
           const printBlocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",printFile.sha256))||[]
           if (printBlocked.length) throw new ApiError(422,"content_blocked","Prepared artwork blocked")
           if (!checked(await db.rpc("partner_reserve_print_artwork",{p_job:job.id,p_lease:job.lease_token,p_hash:printFile.sha256,p_version:PRINT_PROCESSING_VERSION}))) continue
