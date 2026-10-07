@@ -68,9 +68,9 @@ export function makePartnerKey() {
   return `partner_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`
 }
 
-export function makeWidgetSnippet() {
+export function makeWidgetSnippet(partnerKey: string) {
   const origin = process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL || process.env.NEXT_PUBLIC_CARDIFY_APP_URL || "https://partners.tcgplaytest.com"
-  return widgetSnippet(origin, process.env.TCGPLAYTEST_CHECKOUT_ORIGIN || "https://www.tcgplaytest.com")
+  return widgetSnippet(origin, process.env.TCGPLAYTEST_CHECKOUT_ORIGIN || "https://www.tcgplaytest.com", partnerKey)
 }
 
 function toBase64Url(input: string | Buffer) {
@@ -245,7 +245,7 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
   const approved = request.status === "approved"
   const subject = approved ? "Your TCGPlaytest partnership is approved" : "TCGPlaytest partnership update"
   const text = approved
-    ? `Hi ${request.full_name || request.business_name},\n\nYour TCGPlaytest partnership is approved.\n\nSign in to your TCGPlaytest dashboard to copy your widget code, accept the manufacturing API terms, and create your test and live REST API keys. Connect the widget to your server using the integration guide. No Stripe Connect account is required.\n\nTCGPlaytest`
+    ? `Hi ${request.full_name || request.business_name},\n\nYour TCGPlaytest partnership is approved.\n\nSign in to your TCGPlaytest dashboard to copy your widget code, accept the partner terms, and connect finished card images to your personalized widget. The widget needs no secret API key or partner storage. Server API keys are available separately. No Stripe Connect account is required.\n\nTCGPlaytest`
     : `Hi ${request.full_name || request.business_name},\n\nThanks for applying to become a TCGPlaytest partner. We are not able to approve this application right now.\n\n${request.admin_notes ? `Notes: ${request.admin_notes}\n\n` : ""}TCGPlaytest`
 
   return sendGmailMessage({ to: request.email, subject, text })
@@ -264,10 +264,27 @@ export async function sendWidgetReadyEmail(request: PartnershipRequest) {
     return { sent: false, reason: "Partner access is unavailable." }
   }
 
-  const widgetCode = makeWidgetSnippet()
+  const widgetCode = request.widget_partner_key ? makeWidgetSnippet(request.widget_partner_key) : "Copy your personalized widget from the partner dashboard after accepting the terms."
   const dashboardUrl = (process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL || process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL || "https://partners.tcgplaytest.com").replace(/\/$/, "")
   const subject = "Your TCGPlaytest widget and API access are ready"
-  const text = `Hi ${request.full_name || request.business_name},\n\nYour application is complete and your partner access is active immediately. No manual approval or Stripe Connect account is required.\n\nYOUR WIDGET\n${widgetCode}\n\nConnect the widget to POST /api/tcgplaytest/cart on your own server using this guide:\n${dashboardUrl}/docs#widget\n\nYOUR REST API\nBase URL: ${dashboardUrl}\nPOST /v1/carts - create a certified cart and checkout link\nGET /v1/carts/{id} - cart status\nGET /v1/orders/{id} - manufacturing and shipment status\n\nSign in to accept the manufacturing terms and generate your test and live secret API keys:\n${dashboardUrl}/dashboard\nKeys are displayed once in your dashboard. Store them on your server, never in the widget or browser.\n\nYou supply every front and back and certify content origin, reproduction rights, and manufacturing-only instructions on every order. TCGPlaytest temporarily processes those client-supplied files for printing and fulfillment. Automatic account access does not verify artwork rights. Access can be revoked for suspicious activity or infringement.\n\nTCGPlaytest`
+  const text = `Hi ${request.full_name || request.business_name},
+
+Your application is complete. Sign in and accept the current partner terms before using the widget or API. No manual approval or Stripe Connect account is required.
+
+YOUR WIDGET
+${widgetCode}
+
+The public partner code identifies your account. Connect finished front/back images and quantities in your frontend; TCGPlaytest handles storage, validation and checkout. No secret API key or partner storage is required for the widget. Register each HTTPS website origin in the dashboard. Setup guide:
+${dashboardUrl}/docs#widget
+
+OPTIONAL SERVER API
+Create test/live secret keys only if you choose the server API integration. Keep them on your server. Create a cart, poll validation, then follow the checkout URL.
+
+${dashboardUrl}/dashboard
+
+Partners must not knowingly send unlawful or infringing content, must remove and stop sending notified content, and must cooperate on complaints. Customers certify reproduction rights at checkout. We may refuse, hold or cancel orders and suspend repeat offenders.
+
+TCGPlaytest`
 
   return sendGmailMessage({ to: request.email, subject, text })
 }
