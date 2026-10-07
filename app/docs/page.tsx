@@ -232,6 +232,7 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
     <section id="widget" className="scroll-mt-24 space-y-4">
       <h2 className="text-2xl font-bold">Standalone checkout widget</h2>
       <p>The widget uses a public <code>widget_partner_key</code> assigned to your account automatically. Accept partner terms, copy the personalized snippet from your dashboard and connect your editor&apos;s finished images. You do not need a secret API key, your own storage or a server cart endpoint for this integration.</p>
+      <p>Clicking the widget button opens a TCGPlaytest-branded modal with each design&apos;s front, matching back, quantity and total card count. The customer reviews the cards, then clicks <strong>Proceed to checkout</strong>. Only then do uploads and validation begin. Once the artwork is ready, the widget opens hosted checkout for contact/shipping details, image-rights confirmation and payment. The modal does not collect payment details.</p>
       <ol className="list-decimal space-y-2 pl-6">
         <li>Under <strong>3. Add TCGPlaytest to your website</strong>, add any additional HTTPS website origins. Your registered website is allowed automatically. Exact origins only: production and preview domains must be added separately; no wildcards or localhost.</li>
         <li>Copy your snippet. Use <code>data-mode="test"</code> for a non-paying preview, or <code>data-mode="live"</code> for the configured checkout website. Use the snippet&apos;s partner-platform and checkout origins together.</li>
@@ -241,21 +242,23 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
 // Export the finished card design, including its text and frame.
 TCGPlaytest.configure({
   getItems: async () => [
-    { front: await renderFinishedFront(), back: sharedBackFile, quantity: 4 },
-    { front: await renderDoubleFront(), back: await renderDoubleBack(), quantity: 1 }
+    { label: "My card", front: () => renderFinishedFront(), back: sharedBackFile, quantity: 4 },
+    { label: "Double-faced card", front: () => renderDoubleFront(), back: () => renderDoubleBack(), quantity: 1 }
   ],
   externalRef: "optional-shop-order-reference"
 });
-// The default floating button now handles uploads, progress and checkout.
+// The default floating button opens the branded front/back review modal.
 // For your own button, add data-auto-button="false" to the snippet:
 printButton.onclick = () => TCGPlaytest.open().catch(error => {
   console.error(error.message); // The widget also shows the error in its dialog.
 });
 // After editing the deck, reset a previous attempt before starting a new one:
 // TCGPlaytest.reset();
-// Custom UI may pass {showDialog:false, onProgress: message => ...} to open().`}</Code>
+// Keep the default dialog to show previews and Proceed to checkout.
+// Advanced custom UIs can explicitly opt out with showDialog:false.`}</Code>
       <p>The widget requests an opaque one-hour customer session, uploads directly to TCGPlaytest-owned private storage, creates one cart and polls every four seconds. It redirects only after validation opens the cart. The backend copies your accepted terms and saved affiliate preference. Orders and cart analytics belong to your partner account. The customer certifies image rights at checkout.</p>
-      <p>Retries reuse the submitted cart, including after a page refresh in the same tab. To change a submitted order, call <code>TCGPlaytest.reset()</code>. Failed or expired carts need a new attempt; no API-key rotation is needed. The widget must receive your images through the frontend connection above; a script cannot discover arbitrary editor data automatically.</p>
+      <p>The optional <code>label</code> names a design in the preview. Front/back image factories are cached for the review attempt, so checkout uploads the same files the customer reviewed. Designs are paginated in groups of six, with quantities shown per design. Closing the modal before proceeding creates no uploads or cart. The preview shows supplied artwork; 2 mm print bleed is prepared by the backend during validation.</p>
+      <p>Retries reuse the submitted cart, including after a page refresh in the same tab. The modal offers <strong>Resume checkout</strong> and <strong>Use current designs</strong> for a previous attempt. A resumed cart after refresh explicitly reports that its previews are unavailable; it never substitutes new images into that cart. To change a submitted order programmatically, call <code>TCGPlaytest.reset()</code> when the widget is closed. Failed or expired carts need a new attempt; no API-key rotation is needed. The widget must receive your images through the frontend connection above; a script cannot discover arbitrary editor data automatically.</p>
       <Fields label="Standalone widget protocol" rows={[
         ["POST /api/widget/sessions", "JSON {partner_key, mode}. Returns 201 {token, expires_at, mode, max_cards, max_image_bytes}. Browser Origin must match an allowed website. No secret API key."],
         ["POST /api/widget/uploads", "Bearer session token; JSON {request_id: UUID, content_type, size}. Returns 201 {id, upload_url, method: PUT, headers, max_bytes, upload_expires_at}. PUT the bytes to that URL without the session token or cookies. Reuse request_id only for an identical grant retry."],
