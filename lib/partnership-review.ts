@@ -1,12 +1,12 @@
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
-import { makePartnerKey, sendDecisionEmail } from "@/lib/partnership"
+import { makePartnerKey, sendDecisionEmail, sendRejectionEmail } from "@/lib/partnership"
 import { ApiError } from "@/lib/manufacturing-contract"
 import { PARTNER_REVENUE_SHARING_ENABLED } from "@/lib/partner-features"
 
 export const reviewFields = "id,email,full_name,business_name,website_url,audience,proposed_percentage,approved_percentage,status,admin_notes,reviewed_by,reviewed_at,created_at,updated_at,api_blocked_at,api_block_reason,auto_approved_at,access_revoked_at,access_revoked_by,welcome_email_sent_at,welcome_email_next_attempt_at,welcome_email_attempts,welcome_email_last_error"
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 
-async function countPartnerOrders(partnerId?: string): Promise<number | null> {
+async function countPartnerOrders(partnerId?: string):a Promise<number | null> {
   // Both integrations create manufacturing orders only after payment. Count
   // records, not carts/cards/events, including orders later cancelled or held.
   // Head/count avoids Supabase's row limit and never loads customer or artwork data.
@@ -19,12 +19,13 @@ async function countPartnerOrders(partnerId?: string): Promise<number | null> {
 }
 
 export async function listPartnershipRequests(status: string, page: number) {
-  if (!["all", "pending", "approved", "declined", "revoked"].includes(status) || !Number.isInteger(page) || page < 1 || page > 10000) {
+  if (!["all", "pending", "approved", "declined", "revoked", "rejected"].includes(status) || !Number.isInteger(page) || page < 1 || page > 10000) {
     throw new ApiError(400, "invalid_request", "Choose a valid status and page.")
   }
   const pageSize = 25
   let query = db.from("partnership_requests").select(reviewFields, { count: "exact" })
-  if (status === "revoked") query = query.not("api_blocked_at", "is", null)
+  if (status === "rejected") query = query.or("status.eq.declined,api_blocked_at.not.is.null")
+  else if (status === "revoked") query = query.not("api_blocked_at", "is", null)
   else if (status !== "all") query = query.eq("status", status).is("api_blocked_at", null)
   const { data, count, error } = await query.order("created_at", { ascending: false }).order("id").range((page - 1) * pageSize, page * pageSize - 1)
   if (error) throw new ApiError(500, "database_error", "Could not load partnership requests.")
@@ -32,8 +33,17 @@ export async function listPartnershipRequests(status: string, page: number) {
   const [totalOrders, ...partnerCounts] = await Promise.all([
     countPartnerOrders(), ...requests.map(request => countPartnerOrders(request.id)),
   ])
+  const rejectionEmails = await Promise.all(requests.map(async request => {
+    if (!request.api_blocked_at) return null
+    try {
+      const { data, error } = await db.from("partner_audit_events").select("created_at,details")
+        .eq("partner_id", request.id).eq("action", "rejection_email")
+        .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle()
+      return error ? { status: "unknown" } : data ? { ...data.details, attemptedAt: data.created_at } : { status: "not_recorded" }
+    } catch { return { status: "unknown" } }
+  }))
   return {
-    requests: requests.map((request, index) => ({ ...request, order_count: partnerCounts[index] })),
+    requests: requests.map((request, index) => ({ ...request, order_count: partnerCounts[index], rejection_email: rejectionEmails[index] })),
     total: count || 0, page, pageSize, totalOrders,
     orderCountsUnavailable: totalOrders === null || partnerCounts.some(value => value === null),
   }
@@ -49,7 +59,18 @@ export async function revokePartnership(id: string, body: any, reviewer: string)
   if (data?.missing) throw new ApiError(404, "not_found", "Partner not found.")
   if (data?.conflict) throw new ApiError(409, "review_conflict", "This partner has changed. Refresh before revoking access.")
   if (!data?.partner) throw new ApiError(500, "database_error", "Could not confirm access revocation. Refresh before retrying.")
-  return { request: data.partner, email: { skipped: true }, revoked: true }
+  // Never send a second email for a retry of an already-applied decision.
+  if (data.already_revoked) return { request: data.partner, email: { skipped: true }, revoked: true }
+  const result = await sendRejectionEmail(data.partner, body.reason.trim())
+    .catch(() => ({ sent: false }))
+  const email = { sent: result.sent, reason: result.sent ? null : "Partner rejected, but email could not be sent. Check Gmail configuration on the partner app.", recorded: false }
+  // Delivery outcome uses the existing audit log; no schema migration required.
+  try {
+    const logged = await db.from("partner_audit_events").insert({ partner_id: id, entity_type: "partnership", entity_id: id,
+      action: "rejection_email", actor: reviewer, details: { status: result.sent ? "sent" : "failed", reason: email.reason } })
+    email.recorded = !logged.error
+  } catch { /* Access must remain blocked even if email/audit storage is unavailable. */ }
+  return { request: data.partner, email, revoked: true }
 }
 
 export async function reviewPartnership(id: string, body: any, reviewerEmail: string, pendingOnly = false) {
