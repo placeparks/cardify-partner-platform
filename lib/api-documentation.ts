@@ -4,7 +4,7 @@ import { TERMS_VERSION } from "./manufacturing-contract"
 // import database clients or credentials into the public schema.
 export function documentationConfig() {
   const configured = process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL || process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL
-  const baseUrl = new URL(configured || "https://cardify-partner-platform.vercel.app").origin
+  const baseUrl = new URL(configured || "https://partner.tcgplaytest.com").origin
   return {
     baseUrl,
     maxCards: Number(process.env.PARTNER_MAX_CARDS || 1000),
