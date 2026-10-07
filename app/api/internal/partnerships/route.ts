@@ -3,6 +3,7 @@ import { api, internalAuth, json } from "@/lib/partner-api"
 import { isPartnershipAdmin } from "@/lib/partnership"
 import { ApiError } from "@/lib/manufacturing-contract"
 import { listPartnershipRequests, reviewPartnership, revokePartnership, reviewFields } from "@/lib/partnership-review"
+import { partnerAnalytics } from "@/lib/partner-analytics"
 
 export const maxDuration = 60
 
@@ -19,6 +20,8 @@ export async function POST(request: Request) { return api(async () => {
   let result
   if (body.action === "list") {
     result = await listPartnershipRequests(body.status ?? "all", body.page ?? 1)
+  } else if (body.action === "analytics") {
+    result = await partnerAnalytics(body.period, body.mode)
   } else if (["review", "revoke"].includes(body.action)) {
     if (typeof body.expectedUpdatedAt !== "string" || !body.expectedUpdatedAt) throw new ApiError(400, "invalid_request", "Refresh the application before submitting a decision.")
     const reviewed = body.action === "revoke" ? await revokePartnership(body.id, body, actor.email) : await reviewPartnership(body.id, body, actor.email, true)
