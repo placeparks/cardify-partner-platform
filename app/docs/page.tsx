@@ -61,7 +61,7 @@ if (!statusResponse.ok) throw new Error(status.error.message);
       <ol className="list-decimal space-y-2 pl-6">
         <li>Sign in with Google and complete the <Link href="/partnership" className="underline">partner application</Link>, including the HTTPS website where your integration runs. Completed new applications activate automatically; access can later be revoked.</li>
         <li>In the <Link href="/dashboard" className="underline">dashboard</Link>, accept the current <strong>Partner terms</strong>. Acceptance is once per version.</li>
-        <li>Under <strong>1. Server-side API keys</strong>, create a test or live key. Copy the secret when shown and store it as a server environment variable. Rotating a key immediately revokes the previous key for that mode.</li>
+        <li>Choose your integration: for the <a href="#widget" className="underline">standalone widget</a>, copy your personalized snippet and connect finished card images. For a server API integration, create a test/live key under <strong>1. Server-side API keys</strong>. Keep that secret on your server; the standalone widget does not need it.</li>
         <li>For lifecycle notifications, configure <strong>2. Order webhooks</strong> and copy its separate signing secret. See <a href="#webhooks" className="underline">webhook setup</a>.</li>
       </ol>
       <p>No Stripe Connect account is required. A test key runs artwork validation and opens a non-paying preview; it cannot charge, print or ship. A live key enables payment checkout when that deployment is configured for it.</p>
@@ -230,10 +230,43 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
     </section>
 
     <section id="widget" className="scroll-mt-24 space-y-4">
-      <h2 className="text-2xl font-bold">Checkout widget</h2>
-      <p>Copy the script from your dashboard after implementing server-side cart creation and status routes. The widget calls your same-origin <code>POST /api/tcgplaytest/cart</code>, then polls <code>GET /api/tcgplaytest/cart?cart_id=…</code> until the cart opens. Authenticate the customer, verify order ownership on both routes and apply your shop&apos;s CSRF protection. Relay the API&apos;s cart JSON and errors; never expose the API key.</p>
-      <p>Customize routes using <code>data-cart-endpoint</code> and <code>data-cart-status-endpoint</code>. For a custom button use <code>data-auto-button="false"</code> and <code>{"TCGPlaytest.open({createCart, pollCart})"}</code>; both callbacks call your own authenticated server. The widget shows failures and redirects only to a validated TCGPlaytest checkout URL.</p>
-      <p>For files generated or uploaded on your website, complete the <a href="#uploads" className="underline">direct upload flow</a> before cart creation. You can also supply existing public HTTPS image URLs. The widget does not need a storage account or a browser-side API key.</p>
+      <h2 className="text-2xl font-bold">Standalone checkout widget</h2>
+      <p>The widget uses a public <code>widget_partner_key</code> assigned to your account automatically. Accept partner terms, copy the personalized snippet from your dashboard and connect your editor&apos;s finished images. You do not need a secret API key, your own storage or a server cart endpoint for this integration.</p>
+      <ol className="list-decimal space-y-2 pl-6">
+        <li>Under <strong>3. Add TCGPlaytest to your website</strong>, add any additional HTTPS website origins. Your registered website is allowed automatically. Exact origins only: production and preview domains must be added separately; no wildcards or localhost.</li>
+        <li>Copy your snippet. Use <code>data-mode="test"</code> for a non-paying preview, or <code>data-mode="live"</code> for the configured checkout website. Use the snippet&apos;s partner-platform and checkout origins together.</li>
+        <li>Pass finished PNG/JPEG <code>Blob</code>/<code>File</code> objects or async functions that return them. Single-sided cards share a back; double-faced cards supply their own back. Quantities count physical cards.</li>
+      </ol>
+      <Code label="Standalone widget browser integration">{`// Run after the personalized widget script has loaded.
+// Export the finished card design, including its text and frame.
+TCGPlaytest.configure({
+  getItems: async () => [
+    { front: await renderFinishedFront(), back: sharedBackFile, quantity: 4 },
+    { front: await renderDoubleFront(), back: await renderDoubleBack(), quantity: 1 }
+  ],
+  externalRef: "optional-shop-order-reference"
+});
+// The default floating button now handles uploads, progress and checkout.
+// For your own button, add data-auto-button="false" to the snippet:
+printButton.onclick = () => TCGPlaytest.open().catch(error => {
+  console.error(error.message); // The widget also shows the error in its dialog.
+});
+// After editing the deck, reset a previous attempt before starting a new one:
+// TCGPlaytest.reset();
+// Custom UI may pass {showDialog:false, onProgress: message => ...} to open().`}</Code>
+      <p>The widget requests an opaque one-hour customer session, uploads directly to TCGPlaytest-owned private storage, creates one cart and polls every four seconds. It redirects only after validation opens the cart. The backend copies your accepted terms and saved affiliate preference. Orders and cart analytics belong to your partner account. The customer certifies image rights at checkout.</p>
+      <p>Retries reuse the submitted cart, including after a page refresh in the same tab. To change a submitted order, call <code>TCGPlaytest.reset()</code>. Failed or expired carts need a new attempt; no API-key rotation is needed. The widget must receive your images through the frontend connection above; a script cannot discover arbitrary editor data automatically.</p>
+      <Fields label="Standalone widget protocol" rows={[
+        ["POST /api/widget/sessions", "JSON {partner_key, mode}. Returns 201 {token, expires_at, mode, max_cards, max_image_bytes}. Browser Origin must match an allowed website. No secret API key."],
+        ["POST /api/widget/uploads", "Bearer session token; JSON {request_id: UUID, content_type, size}. Returns 201 {id, upload_url, method: PUT, headers, max_bytes, upload_expires_at}. PUT the bytes to that URL without the session token or cookies. Reuse request_id only for an identical grant retry."],
+        ["POST /api/widget/cart", "Bearer session token; JSON {items:[{front_upload_id, back_upload_id, quantity}], external_ref?}. Only files from this session are accepted. Returns the cart shape documented above, 202 while validating. One immutable cart per session supplies idempotency automatically."],
+        ["GET /api/widget/cart", "Bearer session token. Returns only that session's cart; there is no arbitrary cart ID parameter. Polling does not consume upload or session quotas."],
+        ["Limits", "Default: 60 new sessions per partner/hour; 100 upload grants per session; 500 grants per partner/rolling 24 hours. Each grant reserves up to 20 MiB regardless of claimed size. The operator can configure these limits. Normal image and cart limits still apply."],
+        ["Storage lifetime", "Storage upload grants last two hours and cannot overwrite an existing object. Unused staging files are removed after the one-hour session plus the grant window. Claimed staging files expire with the cart, subject to that minimum window and legal holds. Validated print files follow the cart retention policy."],
+        ["Errors", "401 widget_session_required/expired: start a new session. 403 origin_not_allowed/widget_unavailable/invalid_upload: fix account, website or file ownership. 409 idempotency_conflict: reset for changed inputs. 429 widget_limit: honor Retry-After; repeated quota failures need the operator. Normal validation errors are returned on the cart."],
+      ]}/>
+      <p>The public code is an identifier, not a secret or proof of the caller&apos;s identity. Allowed origins restrict browser use; they do not authenticate non-browser callers. The service enforces expiring sessions, upload quotas, partner status and file ownership independently. Keep the session token private to the customer&apos;s tab.</p>
+      <p>Existing snippets without <code>data-partner-key</code> keep the legacy server-launcher behavior using your own cart endpoint. New snippets use the standalone flow above.</p>
     </section>
     <section id="affiliate" className="scroll-mt-24 space-y-4">
       <h2 className="text-2xl font-bold">Optional affiliate code</h2>
