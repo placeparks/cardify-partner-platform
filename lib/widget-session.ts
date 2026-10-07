@@ -2,6 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { api, checked, digest, json, publicCart, secret } from "@/lib/partner-api"
 import { ApiError, hasPartnerTerms, validateCart } from "@/lib/manufacturing-contract"
+import { scheduleCartValidation } from "@/lib/validation-dispatch"
 
 const BUCKET = "partner-artwork"
 const MAX_BYTES = 20 * 1024 * 1024
@@ -128,6 +129,7 @@ export async function widgetCart(request: Request) {
     { item_index: index, side: "back", quantity: item.quantity, source_url: item.back_image_url, source_origin: new URL(item.back_image_url).origin, expected_sha256: null },
   ])
   const result = rpcResult(checked(await db.rpc("partner_widget_create_cart", { p_session: session.id, p_cart: cart, p_files: files, p_uploads: ids })))
+  scheduleCartValidation(result, cart.id)
   return Response.json(publicCart(result), { status: result.status === "validating" ? 202 : 200, headers: { "Retry-After": "3" } })
 }
 export async function widgetStatus(request: Request) {
