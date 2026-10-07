@@ -64,6 +64,30 @@
     if (attempt && attempt.expires <= Date.now()) { attempt = null; try { sessionStorage.removeItem(savedKey); } catch (_) {} }
   }
 
+  // Resolve shared backs centrally for preview and upload; retain per-design arrays.
+  function snapshotItems(input) {
+    var sharedBack = !Array.isArray(input) && input ? input.sharedBack : undefined;
+    var items = Array.isArray(input) ? input : input && input.items;
+    if (!Array.isArray(items) || !items.length) throw new Error("Connect your editor's finished front/back images using TCGPlaytest.configure({getItems}).");
+    var factories = new Map();
+    function cached(value) {
+      if (typeof value !== "function") return value;
+      if (!factories.has(value)) {
+        var pending;
+        factories.set(value, function () {
+          if (!pending) pending = Promise.resolve().then(value).catch(function (error) { pending = null; throw error; });
+          return pending;
+        });
+      }
+      return factories.get(value);
+    }
+    return items.map(function (item, index) {
+      var back = sharedBack == null ? item && item.back : sharedBack;
+      if (!item || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || !item.front || !back) throw new Error("Each design needs a front, a shared or individual back, and a positive whole-number quantity.");
+      return { label: typeof item.label === "string" ? item.label : "Card " + (index + 1), front: cached(item.front), back: cached(back), quantity: item.quantity };
+    });
+  }
+
   // The shared widget owns the review UI. Partners only supply finished images.
   function reviewDialog(config) {
     return new Promise(function (resolve) {
@@ -144,25 +168,6 @@
         proceed.textContent = busy ? "Preparing checkout…" : attempt ? "Resume checkout" : "Proceed to checkout";
         dialog.setAttribute("aria-busy", String(busy || loading));
       }
-      function snapshot(input) {
-        if (!Array.isArray(input) || !input.length) throw new Error("Connect your editor's finished front/back images using TCGPlaytest.configure({getItems}).");
-        var factories = new Map();
-        function cached(value) {
-          if (typeof value !== "function") return value;
-          if (!factories.has(value)) {
-            var pending;
-            factories.set(value, function () {
-              if (!pending) pending = Promise.resolve().then(value).catch(function (error) { pending = null; throw error; });
-              return pending;
-            });
-          }
-          return factories.get(value);
-        }
-        return input.map(function (item, index) {
-          if (!item || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || !item.front || !item.back) throw new Error("Each design needs front/back images and a positive whole-number quantity.");
-          return { label: typeof item.label === "string" ? item.label : "Card " + (index + 1), front: cached(item.front), back: cached(item.back), quantity: item.quantity };
-        });
-      }
       async function renderPage() {
         var current = ++generation;
         loading = true; controls(); revokeUrls(); grid.replaceChildren();
@@ -202,7 +207,7 @@
       async function load() {
         loading = true; controls(); fresh.hidden = !attempt;
         try {
-          items = attempt ? (attempt.items || null) : snapshot(config.getItems ? await config.getItems() : config.items);
+          items = attempt ? (attempt.items || null) : snapshotItems(config.getItems ? await config.getItems() : config.items);
           if (done) return;
           var orderItems = items || attempt.payload.items;
           count.textContent = orderItems.reduce(function (sum, item) { return sum + item.quantity; }, 0) + " cards · " + orderItems.length + " designs";
@@ -249,13 +254,8 @@
     try {
       restoreAttempt();
       if (!attempt) {
-        var items = config.getItems ? await config.getItems() : config.items;
-        if (!Array.isArray(items) || !items.length) throw new Error("Connect your editor's finished front/back images using TCGPlaytest.configure({getItems}).");
-        var total = 0;
-        items.forEach(function (item) {
-          if (!item || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || !item.front || !item.back) throw new Error("Each design needs front/back images and a positive whole-number quantity.");
-          total += item.quantity;
-        });
+        var items = snapshotItems(config.getItems ? await config.getItems() : config.items);
+        var total = items.reduce(function (sum, item) { return sum + item.quantity; }, 0);
         progress("Connecting to TCGPlaytest…");
         var session = await widgetRequest("sessions", "POST", { partner_key: settings.partnerKey, mode: settings.mode || "live" });
         if (total > session.max_cards || items.length > session.max_cards) throw new Error("This order exceeds the maximum of " + session.max_cards + " cards.");
