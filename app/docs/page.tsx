@@ -105,6 +105,7 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
 // Tell YOUR server the upload finished. It checks ownership, then puts
 // grant.image_url into items[].image_url or back_image_url in POST /v1/carts.
 // Upload every required front/back before creating the cart. No finalize call.`}</Code>
+      <p>For multiple files, reuse the same uploaded image URL wherever that image repeats, including shared backs. You can upload different files concurrently with a small limit, such as three transfers at a time. Upload-grant requests still share the API rate limit; respect <code>Retry-After</code> and create the cart only after every required upload succeeds. Validation is queued, so finishing the upload does not immediately open checkout.</p>
       <Fields label="Direct upload rules" rows={[
         ["POST /v1/uploads body", 'Only content_type ("image/png" or "image/jpeg") and size (integer 1–20,971,520 bytes). Metadata only.'],
         ["upload_url / method / headers", "PUT raw file bytes using the returned headers. No partner API key, storage account credentials or cookies are sent to storage. Browser uploads bypass the application server's body-size limit."],
@@ -236,15 +237,18 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
       <ol className="list-decimal space-y-2 pl-6">
         <li>Under <strong>3. Add TCGPlaytest to your website</strong>, add any additional HTTPS website origins. Your registered website is allowed automatically. Exact origins only: production and preview domains must be added separately; no wildcards or localhost.</li>
         <li>Copy your snippet. Use <code>data-mode="test"</code> for a non-paying preview, or <code>data-mode="live"</code> for the configured checkout website. Use the snippet&apos;s partner-platform and checkout origins together.</li>
-        <li>Pass finished PNG/JPEG <code>Blob</code>/<code>File</code> objects or async functions that return them. Single-sided cards share a back; double-faced cards supply their own back. Quantities count physical cards.</li>
+        <li>Pass finished PNG/JPEG <code>Blob</code>/<code>File</code> objects or async functions that return them. Return <code>{'{ items, sharedBack }'}</code> to apply one selected back to every design. The widget handles back selection, previews and uploads. Quantities count physical cards.</li>
       </ol>
       <Code label="Standalone widget browser integration">{`// Run after the personalized widget script has loaded.
 // Export the finished card design, including its text and frame.
 TCGPlaytest.configure({
-  getItems: async () => [
-    { label: "My card", front: () => renderFinishedFront(), back: sharedBackFile, quantity: 4 },
-    { label: "Double-faced card", front: () => renderDoubleFront(), back: () => renderDoubleBack(), quantity: 1 }
-  ],
+  getItems: async () => ({
+    sharedBack: sharedBackFile,
+    items: [
+      { label: "My card", front: () => renderFinishedFront(), quantity: 4 },
+      { label: "Another card", front: () => renderAnotherFront(), quantity: 1 }
+    ]
+  }),
   externalRef: "optional-shop-order-reference"
 });
 // The default floating button opens the branded front/back review modal.
@@ -257,6 +261,8 @@ printButton.onclick = () => TCGPlaytest.open().catch(error => {
 // Keep the default dialog to show previews and Proceed to checkout.
 // Advanced custom UIs can explicitly opt out with showDialog:false.`}</Code>
       <p>The widget requests an opaque one-hour customer session, uploads directly to TCGPlaytest-owned private storage, creates one cart and polls every four seconds. It redirects only after validation opens the cart. The backend copies your accepted terms and saved affiliate preference. Orders and cart analytics belong to your partner account. The customer certifies image rights at checkout.</p>
+      <p>The widget uploads up to three files at a time and uploads a reused shared-back Blob only once per attempt. Retrying in the same page keeps successfully uploaded files, including completed fronts whose backs still need uploading. No extra partner configuration is required. Session expiry can require a new attempt. Upload quotas still apply; validation runs in the background after upload.</p>
+      <p><code>sharedBack</code> overrides every item&apos;s back, including generated reverse faces, in both the preview and the uploaded order. Partners supply that image once; they do not implement the selection rule or checkout UI. To keep different backs, omit <code>sharedBack</code> and provide <code>back</code> on every item. The original array return shape remains supported for individual front/back pairs. A shared back can also be an async Blob factory.</p>
       <p>The optional <code>label</code> names a design in the preview. Front/back image factories are cached for the review attempt, so checkout uploads the same files the customer reviewed. Designs are paginated in groups of six, with quantities shown per design. Closing the modal before proceeding creates no uploads or cart. The preview shows supplied artwork; 2 mm print bleed is prepared by the backend during validation.</p>
       <p>Retries reuse the submitted cart, including after a page refresh in the same tab. The modal offers <strong>Resume checkout</strong> and <strong>Use current designs</strong> for a previous attempt. A resumed cart after refresh explicitly reports that its previews are unavailable; it never substitutes new images into that cart. To change a submitted order programmatically, call <code>TCGPlaytest.reset()</code> when the widget is closed. Failed or expired carts need a new attempt; no API-key rotation is needed. The widget must receive your images through the frontend connection above; a script cannot discover arbitrary editor data automatically.</p>
       <Fields label="Standalone widget protocol" rows={[
