@@ -21,10 +21,10 @@ export const validationErrors = [
   ["image_url_unsafe", "The URL or redirect is not public IPv4 HTTPS; private/local destinations are blocked."],
   ["image_redirect_limit", "More than three redirects."],
   ["image_timeout", "The 15-second total download deadline was exceeded, including DNS, TLS, redirects and body reads."],
-  ["image_too_large", "More than 20 MiB (20,971,520 bytes)."],
+  ["image_too_large", "Source or prepared print image exceeds 20 MiB (20,971,520 bytes)."],
   ["image_invalid", "Not a fully decodable, single-frame PNG/JPEG."],
   ["image_dimensions_invalid", "Below the configured minimum width or height."],
-  ["image_pixels_exceeded", "More than 40,000,000 pixels (width × height)."],
+  ["image_pixels_exceeded", "Source or image including automatic bleed exceeds 40,000,000 pixels (width × height)."],
   ["image_hash_mismatch", "An optional supplied SHA-256 does not match the downloaded bytes."],
   ["content_blocked", "This artwork cannot be accepted."],
   ["validation_unavailable", "Validation/storage could not complete. Create a new cart or contact support."],
@@ -91,8 +91,27 @@ export function buildOpenApi(config = documentationConfig()) {
     servers: [{ url: config.baseUrl, description: "API base for this partner platform deployment; use keys issued by this environment." }],
     externalDocs: { url: `${config.baseUrl}/docs`, description: "Setup, constraints, responsibilities and integration guide" },
     security: [{ PartnerApiKey: [] }],
-    tags: [{ name: "Uploads" }, { name: "Carts" }, { name: "Orders" }],
+    tags: [{ name: "Uploads" }, { name: "Carts" }, { name: "Orders" }, { name: "Widget" }],
     paths: {
+      "/api/widget/sessions": { post: {
+        operationId: "startWidgetSession", tags: ["Widget"], security: [], summary: "Start a standalone widget session using a public partner code",
+        description: "The browser Origin must match the registered website or an additional widget origin. Requires active partnership and current terms. No API key. Defaults to at most 60 new sessions per partner/hour; the operator may override this. Token expires in one hour and authorizes only this session's uploads and one cart.",
+        parameters: [{name:"Origin",in:"header",required:true,schema:{type:"string",format:"uri"}}],
+        requestBody: {required:true,content:{"application/json":{schema:object({partner_key:{type:"string",pattern:"^partner_[a-f0-9]{24,32}$"},mode:{type:"string",enum:["test","live"]}})}}},
+        responses: {"201":{description:"Customer-scoped token; never log or share it.",content:{"application/json":{schema:object({token:string,expires_at:timestamp,mode:{type:"string",enum:["test","live"]},max_cards:{type:"integer"},max_image_bytes:{type:"integer",const:20971520}})}}},...errors([400,403,413,429,500,503])},
+      }},
+      "/api/widget/uploads": { post: {
+        operationId:"createWidgetUpload",tags:["Widget"],security:[{WidgetSession:[]}],summary:"Reserve a session-owned direct-storage upload",
+        description:"Send Origin and the session bearer token. Reuse request_id for an identical retry. Returns a two-hour non-overwriting storage grant. PUT raw bytes with returned headers, without the widget token or cookies. Defaults: 100 grants/session and 500 grants/partner/rolling 24 hours, reserving a full 20 MiB per grant. The operator may override these quotas.",
+        requestBody:{required:true,content:{"application/json":{schema:object({request_id:{type:"string",format:"uuid"},content_type:{type:"string",enum:["image/png","image/jpeg"]},size:{type:"integer",minimum:1,maximum:20971520}})}}},
+        responses:{"201":{description:"Upload the bytes before creating the cart.",content:{"application/json":{schema:object({id:{type:"string",format:"uuid"},upload_url:{type:"string",format:"uri"},method:{type:"string",const:"PUT"},headers:object({"Content-Type":{type:"string",enum:["image/png","image/jpeg"]}}),max_bytes:{type:"integer",const:20971520},upload_expires_at:timestamp})}}},...errors([400,401,403,409,413,429,500,503])},
+      }},
+      "/api/widget/cart": {
+        post:{operationId:"createWidgetCart",tags:["Widget"],security:[{WidgetSession:[]}],summary:"Create this session's single cart",description:"Send Origin and session bearer token. Upload IDs must belong to this session. Identical retries reuse the cart; changed inputs need a new session. No Idempotency-Key header, API key, certification or affiliate_code field. Attribution and terms are set by the backend.",
+          requestBody:{required:true,content:{"application/json":{schema:object({items:{type:"array",minItems:1,maxItems:config.maxCards,items:object({front_upload_id:{type:"string",format:"uuid"},back_upload_id:{type:"string",format:"uuid"},quantity})},external_ref:externalRef},["items"])}}},
+          responses:{"202":cartResponse("Queued for validation",{validating:e.validating}),"200":cartResponse("Existing cart",{open:e.open,failed:e.failed}),...errors([400,401,403,409,413,429,500,503])}},
+        get:{operationId:"getWidgetCart",tags:["Widget"],security:[{WidgetSession:[]}],summary:"Poll only the session's cart",description:"Send Origin and session bearer token. No arbitrary cart ID parameter. Poll every 3–5 seconds; reads are exempt from upload/session quotas. Follow checkout_url only when open.",responses:{"200":cartResponse("Current cart",{validating:e.validating,open:e.open,failed:e.failed}),...errors([401,403,404,500])}},
+      },
       "/v1/uploads": { post: {
         operationId: "createUpload", tags: ["Uploads"], summary: "Get a temporary direct-to-TCGPlaytest-storage upload link",
         description: `Send metadata only with your server-side API key. No partner storage account is needed. Counts toward the shared ${config.rateLimit}/minute/key limit. PUT raw file bytes to upload_url with the returned headers, without the API key or cookies. Wait for a successful 2xx PUT, then use image_url unchanged in a cart front/back field. No finalize call. Links cannot overwrite existing files. Test and live keys are supported; test keys still cannot pay. Upload success is not artwork validation: the cart worker performs all checks. On an uncertain PUT outcome, request a new upload link and retry the file.`,
@@ -107,7 +126,7 @@ export function buildOpenApi(config = documentationConfig()) {
       } },
       "/v1/carts": { post: {
         operationId: "createCart", tags: ["Carts"], summary: "Queue URL validation and create a cart",
-        description: `Returns 202 immediately while a separate worker checks artwork; no checkout_url until open. Request JSON is limited to 512,000 bytes. Maximum ${config.maxCards} items AND ${config.maxCards} total copies. Downloads allow 20 MiB/file, 40 MP, minimum ${config.minWidth}×${config.minHeight}, 3 redirects and a 15-second total deadline per URL attempt. Identical retries with the same key return the original cart (202 validating; 200 otherwise). A failed cart requires corrected inputs and a new Idempotency-Key, not a new API key. Default deployment cart lifetime: ${config.expiryHours} hours from creation.`,
+        description: `Returns 202 immediately while a separate worker checks artwork and prepares default 2 mm bleed on every front/back; recognized existing 2 mm bleed is preserved and 3 mm is cropped to 2 mm. Source hashes always refer to submitted bytes, and production uses the prepared image. The source and prepared file must each meet the size/pixel limits; no checkout_url until open. Request JSON is limited to 512,000 bytes. Maximum ${config.maxCards} items AND ${config.maxCards} total copies. Downloads allow 20 MiB/file, 40 MP, minimum ${config.minWidth}×${config.minHeight}, 3 redirects and a 15-second total deadline per URL attempt. Identical retries with the same key return the original cart (202 validating; 200 otherwise). A failed cart requires corrected inputs and a new Idempotency-Key, not a new API key. Default deployment cart lifetime: ${config.expiryHours} hours from creation.`,
         parameters: [{ name: "Idempotency-Key", in: "header", required: true, description: "1–200 visible ASCII characters (0x21–0x7E); no spaces. Use a unique value per order revision. Scoped to partner + test/live mode; reuse only for identical retries.", schema: { type: "string", minLength: 1, maxLength: 200, pattern: "^[!-~]{1,200}$" }, example: "store-order-1042-rev1" }],
         requestBody: { required: true, content: { "application/json": { schema: ref("CreateCart"), example: createCartExample } } },
         responses: { "202": cartResponse("Artwork queued or still validating", {validating:e.validating}), "200": cartResponse("An idempotent replay of an existing cart which is no longer validating", {open:e.open,failed:e.failed}), ...errors([400,401,403,409,413,429,500,503]) },
@@ -133,7 +152,7 @@ export function buildOpenApi(config = documentationConfig()) {
       responses: { "200": { description: "Any 2xx acknowledges receipt. Respond within 15 seconds; redirects are not followed." } },
     } } },
     components: {
-      securitySchemes: { PartnerApiKey: { type: "http", scheme: "bearer", bearerFormat: "tcgp_test_<64 lowercase hex> or tcgp_live_<64 lowercase hex>", description: "Server-side key created in the dashboard. Test/live data are isolated. Rotating revokes the previous key for that mode." } },
+      securitySchemes: { WidgetSession: {type:"http",scheme:"bearer",bearerFormat:"wses_<64 lowercase hex>",description:"Opaque one-hour customer session from POST /api/widget/sessions, not a partner API key. Origin must match the issuing website."}, PartnerApiKey: { type: "http", scheme: "bearer", bearerFormat: "tcgp_test_<64 lowercase hex> or tcgp_live_<64 lowercase hex>", description: "Server-side key created in the dashboard. Test/live data are isolated. Rotating revokes the previous key for that mode." } },
       schemas: {
         CreateUpload: object({ content_type: { type: "string", enum: ["image/png", "image/jpeg"] }, size: { type: "integer", minimum: 1, maximum: 20971520, description: "Exact file byte count; storage and the validation worker enforce the 20 MiB maximum independently." } }),
         UploadGrant: object({
@@ -196,6 +215,7 @@ API path version: /v1. OpenAPI document revision is not a new API path version.
 
 ## Contract
 - Authorization: Bearer <server-side partner API key>. Never put the key in browser/widget code.
+- Auto-bleed is API-managed before a cart becomes open: 2 mm on a 63 x 88 mm finished card, using the website mask/corner rules. Partners submit finished artwork without implementing bleed. Recognized existing 2 mm bleed is preserved; 3 mm is cropped to 2 mm. Example: 1500x2100 becomes 1596x2196. Optional SHA-256 checks the original source, not the prepared file. Dashboard/production use prepared files. Both original and prepared files are private, cart-scoped, and share expiry/retention/holds. Source and prepared files each must fit 20 MiB and 40 MP. Existing orders are not retroactively processed.
 - Optional POST /v1/uploads with {content_type: "image/png" or "image/jpeg", size: file byte count} returns 201 {upload_url, method: "PUT", headers: {"Content-Type": ...}, image_url, upload_expires_at, expires_at, max_bytes: 20971520}. No partner Blob/Supabase account or hosting is needed. PUT raw bytes to upload_url with only the returned headers, no API key/cookies. Upload link lasts 2 hours and cannot overwrite. After successful PUT, use image_url unchanged in the existing cart fields; no finalize call. Upload authorization uses the shared write rate limit; honor Retry-After. A failed/uncertain PUT can be retried with a fresh grant. The cart worker still performs all validation.
 - image_url is a private signed capability, scoped to the partner and key mode and valid for 8 days; do not log/share it. Create the cart promptly. Issuing key revocation disables source access. Source staging files are removed by maintenance after expiry (normally within the following day). Validated cart files follow the retention rules below. Test keys support uploads but cannot pay.
 - POST /v1/carts requires Idempotency-Key: 1–200 visible ASCII characters, no spaces. Body: items with image_url, quantity and item/shared back_image_url; optional hashes, external_ref, return_url and standard card_stock only.
@@ -209,5 +229,14 @@ API path version: /v1. OpenAPI document revision is not a new API path version.
 - GET /v1/orders/{id} uses cart.order_id or an order webhook data.id. It returns id, cart_id, status, shipment, created_at, updated_at, external_ref and card_count. Browser return is not proof of payment.
 - Webhooks: order.paid, order.in_production, order.shipped, order.cancelled, cart.expired. Envelope: id, type, created_at, data. Deduplicate by top-level id. Verify TCGP-Signature (t=Unix seconds,v1=hex HMAC-SHA256) over timestamp + "." + exact raw body, with the signing secret, constant-time comparison and ±300-second tolerance. Respond 2xx after durable receipt. Up to 12 attempts; no delivery-order guarantee.
 - Webhook endpoints must share the registered website origin. Test/live settings and secrets are separate; saving rotates the secret. Test keys validate artwork and may receive cart.expired, but cannot create paid/production/shipment events. No synthetic-event endpoint is provided.
+## Standalone widget (no partner secret API key or partner storage)
+- Copy the personalized script from the dashboard after accepting terms. data-partner-key is the public widget_partner_key, not an API secret. data-mode is test (non-paying preview) or live. Register each exact HTTPS website origin in the dashboard.
+- After script load call TCGPlaytest.configure({getItems: async () => [{front: finishedPngBlob, back: backFile, quantity: 1}]}). Front/back can also be async Blob factories. The default button handles uploads, validation progress and redirect. For a custom button use data-auto-button="false" and TCGPlaytest.open().
+- Call TCGPlaytest.reset() after editing a previously submitted deck. Network retries and same-tab reloads resume the same submitted cart. The public-code widget does not call a partner-owned cart endpoint.
+- POST /api/widget/sessions with {partner_key,mode} returns {token,expires_at,mode,max_cards,max_image_bytes}. Session lives one hour, is scoped to a partner, origin and mode, and can create only one cart.
+- With Authorization: Bearer <session token>, POST /api/widget/uploads with {request_id: UUID,content_type,size} returns {id,upload_url,method,headers,max_bytes,upload_expires_at}. PUT bytes directly to the returned URL without Authorization/cookies. Storage grants last two hours and cannot overwrite.
+- POST /api/widget/cart with {items:[{front_upload_id,back_upload_id,quantity}],external_ref?}; only session-owned uploads accepted. GET /api/widget/cart polls that same cart. Both return the documented Cart shape. Use Origin and the session token on these calls, never a secret API key.
+- Defaults: 60 sessions/partner/hour, 100 grants/session, 500 grants/partner/rolling 24 hours; reserve 20 MiB per grant. Operators can adjust quotas. Cart GET is exempt. Honor Retry-After on 429.
+- Partner terms, affiliate setting, order ownership and analytics are assigned server-side. Public codes and Origin checks alone do not authenticate non-browser callers; expiring sessions, quotas and ownership checks limit public upload access.
 `
 }
