@@ -30,47 +30,60 @@ async function storeCheckedFile(path: string, bytes: Buffer, file: {sha256:strin
 // checkout, payment or print handlers. URL deduplication is scoped to one cart.
 export async function validateQueuedArtwork(deadline=Date.now()+40000) {
   const result={checked:0,failures:0}
-  while (Date.now()+20000<deadline) {
-    const [job]=checked(await db.rpc("partner_claim_validation"))||[]
-    if (!job) break
-    let errorCode:string|null=null
+  let stopped=false
+  async function worker() {
     try {
-      if (job.attempts>3) throw new ApiError(422,"validation_unavailable","Worker retry limit reached")
-      let bytes:Buffer|undefined
-      if (job.storage_path) {
-        const saved=await db.storage.from("partner-artwork").download(job.storage_path)
-        if (saved.data) bytes=Buffer.from(await saved.data.arrayBuffer())
+      while (!stopped && Date.now()+20000<deadline) {
+        const [job]=checked(await db.rpc("partner_claim_validation"))||[]
+        if (!job) break
+        let errorCode:string|null=null
+        try {
+          if (job.attempts>3) throw new ApiError(422,"validation_unavailable","Worker retry limit reached")
+          let bytes:Buffer|undefined
+          if (job.storage_path) {
+            const saved=await db.storage.from("partner-artwork").download(job.storage_path)
+            if (saved.data) bytes=Buffer.from(await saved.data.arrayBuffer())
+          }
+          if (!bytes) {
+            const download=await safeRequest(job.source_url,{maxRedirects:3})
+            if (download.status!==200) throw new ApiError(422,"image_unreachable","Image URL did not return 200")
+            bytes=download.bytes
+          }
+          const file=await preflight(bytes)
+          if (!checked(await db.rpc("partner_reserve_validation",{p_job:job.id,p_lease:job.lease_token,p_hash:file.sha256,p_type:file.contentType}))) continue
+          const blocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",file.sha256))||[]
+          if (blocked.length) throw new ApiError(422,"content_blocked","Artwork blocked")
+          const path=`carts/${job.cart_id}/${file.sha256}`
+          await storeCheckedFile(path,bytes,file)
+          // Keep the source hash for optional client SHA verification and takedowns.
+          // The separately tracked output is what the dashboard and production read.
+          let printBytes:Buffer|undefined
+          if (job.print_version===PRINT_PROCESSING_VERSION && job.print_storage_path && job.print_sha256) {
+            const saved=await db.storage.from("partner-artwork").download(job.print_storage_path)
+            if (saved.data) {
+              const candidate=Buffer.from(await saved.data.arrayBuffer())
+              if (digest(candidate)===job.print_sha256) printBytes=candidate
+            }
+          }
+          printBytes ||= await preparePrintArtwork(bytes)
+          const printFile=await preflight(printBytes)
+          const printBlocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",printFile.sha256))||[]
+          if (printBlocked.length) throw new ApiError(422,"content_blocked","Prepared artwork blocked")
+          if (!checked(await db.rpc("partner_reserve_print_artwork",{p_job:job.id,p_lease:job.lease_token,p_hash:printFile.sha256,p_version:PRINT_PROCESSING_VERSION}))) continue
+          if (printFile.sha256!==file.sha256) await storeCheckedFile(`carts/${job.cart_id}/${printFile.sha256}`,printBytes,printFile)
+        } catch (error) { result.failures++;errorCode=error instanceof ApiError ? error.code : "validation_unavailable" }
+        checked(await db.rpc("partner_finish_validation",{p_job:job.id,p_lease:job.lease_token,p_error:errorCode}))
+        result.checked++
       }
-      if (!bytes) {
-        const download=await safeRequest(job.source_url,{maxRedirects:3})
-        if (download.status!==200) throw new ApiError(422,"image_unreachable","Image URL did not return 200")
-        bytes=download.bytes
-      }
-      const file=await preflight(bytes)
-      if (!checked(await db.rpc("partner_reserve_validation",{p_job:job.id,p_lease:job.lease_token,p_hash:file.sha256,p_type:file.contentType}))) continue
-      const blocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",file.sha256))||[]
-      if (blocked.length) throw new ApiError(422,"content_blocked","Artwork blocked")
-      const path=`carts/${job.cart_id}/${file.sha256}`
-      await storeCheckedFile(path,bytes,file)
-      // Keep the source hash for optional client SHA verification and takedowns.
-      // The separately tracked output is what the dashboard and production read.
-      let printBytes:Buffer|undefined
-      if (job.print_version===PRINT_PROCESSING_VERSION && job.print_storage_path && job.print_sha256) {
-        const saved=await db.storage.from("partner-artwork").download(job.print_storage_path)
-        if (saved.data) {
-          const candidate=Buffer.from(await saved.data.arrayBuffer())
-          if (digest(candidate)===job.print_sha256) printBytes=candidate
-        }
-      }
-      printBytes ||= await preparePrintArtwork(bytes)
-      const printFile=await preflight(printBytes)
-      const printBlocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",printFile.sha256))||[]
-      if (printBlocked.length) throw new ApiError(422,"content_blocked","Prepared artwork blocked")
-      if (!checked(await db.rpc("partner_reserve_print_artwork",{p_job:job.id,p_lease:job.lease_token,p_hash:printFile.sha256,p_version:PRINT_PROCESSING_VERSION}))) continue
-      if (printFile.sha256!==file.sha256) await storeCheckedFile(`carts/${job.cart_id}/${printFile.sha256}`,printBytes,printFile)
-    } catch (error) { result.failures++;errorCode=error instanceof ApiError ? error.code : "validation_unavailable" }
-    checked(await db.rpc("partner_finish_validation",{p_job:job.id,p_lease:job.lease_token,p_error:errorCode}))
-    result.checked++
+    } catch (error) {
+      stopped=true
+      throw error
+    }
   }
+  // Claims are leased atomically by the database. Limit decoding/bleed work to
+  // two jobs to bound memory for large images, and retain the deadline buffer.
+  // Drain already claimed jobs even if another worker hits a database failure.
+  const outcomes=await Promise.allSettled([worker(),worker()])
+  for (const outcome of outcomes) if (outcome.status==="rejected") throw outcome.reason
   return result
 }
