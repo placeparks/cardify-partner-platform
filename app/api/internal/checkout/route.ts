@@ -7,8 +7,8 @@ export async function POST(request: Request) { return api(async () => {
   const cart = checked(await db.from("partner_carts").select("*,partner:partnership_requests(status,api_blocked_at)").eq("checkout_token_hash", digest(String(body.token || ""))).maybeSingle())
   if (!cart || cart.mode !== "live") throw new ApiError(404,"not_found","Live cart not found")
   if (cart.status !== "open" || Date.parse(cart.expires_at) <= Date.now() || cart.partner.api_blocked_at || cart.partner.status !== "approved") throw new ApiError(409,"cart_unavailable","Cart is no longer available")
-  const files = checked(await db.from("partner_artwork").select("item_index,side,quantity,state,expected_sha256,actual_sha256,storage_path").eq("cart_id",cart.id).order("item_index")) || []
-  const hashes = files.flatMap((f:any)=>[f.actual_sha256,f.expected_sha256]).filter(Boolean)
+  const files = checked(await db.from("partner_artwork").select("item_index,side,quantity,state,expected_sha256,actual_sha256,storage_path,print_sha256").eq("cart_id",cart.id).order("item_index")) || []
+  const hashes = files.flatMap((f:any)=>[f.actual_sha256,f.expected_sha256,f.print_sha256]).filter(Boolean)
   const blocks = hashes.length ? checked(await db.from("partner_content_blocks").select("sha256").in("sha256",hashes)) || [] : []
   if (files.some((f:any)=>f.state === "blocked") || blocks.length) throw new ApiError(403,"content_blocked","Artwork is blocked")
   if (!files.length || files.some((f:any)=>f.state !== "stored" || !f.storage_path)) throw new ApiError(409,"artwork_not_ready","Artwork has not passed validation")

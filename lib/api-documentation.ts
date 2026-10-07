@@ -21,10 +21,10 @@ export const validationErrors = [
   ["image_url_unsafe", "The URL or redirect is not public IPv4 HTTPS; private/local destinations are blocked."],
   ["image_redirect_limit", "More than three redirects."],
   ["image_timeout", "The 15-second total download deadline was exceeded, including DNS, TLS, redirects and body reads."],
-  ["image_too_large", "More than 20 MiB (20,971,520 bytes)."],
+  ["image_too_large", "Source or prepared print image exceeds 20 MiB (20,971,520 bytes)."],
   ["image_invalid", "Not a fully decodable, single-frame PNG/JPEG."],
   ["image_dimensions_invalid", "Below the configured minimum width or height."],
-  ["image_pixels_exceeded", "More than 40,000,000 pixels (width × height)."],
+  ["image_pixels_exceeded", "Source or image including automatic bleed exceeds 40,000,000 pixels (width × height)."],
   ["image_hash_mismatch", "An optional supplied SHA-256 does not match the downloaded bytes."],
   ["content_blocked", "This artwork cannot be accepted."],
   ["validation_unavailable", "Validation/storage could not complete. Create a new cart or contact support."],
@@ -107,7 +107,7 @@ export function buildOpenApi(config = documentationConfig()) {
       } },
       "/v1/carts": { post: {
         operationId: "createCart", tags: ["Carts"], summary: "Queue URL validation and create a cart",
-        description: `Returns 202 immediately while a separate worker checks artwork; no checkout_url until open. Request JSON is limited to 512,000 bytes. Maximum ${config.maxCards} items AND ${config.maxCards} total copies. Downloads allow 20 MiB/file, 40 MP, minimum ${config.minWidth}×${config.minHeight}, 3 redirects and a 15-second total deadline per URL attempt. Identical retries with the same key return the original cart (202 validating; 200 otherwise). A failed cart requires corrected inputs and a new Idempotency-Key, not a new API key. Default deployment cart lifetime: ${config.expiryHours} hours from creation.`,
+        description: `Returns 202 immediately while a separate worker checks artwork and prepares default 2 mm bleed on every front/back; recognized existing 2 mm bleed is preserved and 3 mm is cropped to 2 mm. Source hashes always refer to submitted bytes, and production uses the prepared image. The source and prepared file must each meet the size/pixel limits; no checkout_url until open. Request JSON is limited to 512,000 bytes. Maximum ${config.maxCards} items AND ${config.maxCards} total copies. Downloads allow 20 MiB/file, 40 MP, minimum ${config.minWidth}×${config.minHeight}, 3 redirects and a 15-second total deadline per URL attempt. Identical retries with the same key return the original cart (202 validating; 200 otherwise). A failed cart requires corrected inputs and a new Idempotency-Key, not a new API key. Default deployment cart lifetime: ${config.expiryHours} hours from creation.`,
         parameters: [{ name: "Idempotency-Key", in: "header", required: true, description: "1–200 visible ASCII characters (0x21–0x7E); no spaces. Use a unique value per order revision. Scoped to partner + test/live mode; reuse only for identical retries.", schema: { type: "string", minLength: 1, maxLength: 200, pattern: "^[!-~]{1,200}$" }, example: "store-order-1042-rev1" }],
         requestBody: { required: true, content: { "application/json": { schema: ref("CreateCart"), example: createCartExample } } },
         responses: { "202": cartResponse("Artwork queued or still validating", {validating:e.validating}), "200": cartResponse("An idempotent replay of an existing cart which is no longer validating", {open:e.open,failed:e.failed}), ...errors([400,401,403,409,413,429,500,503]) },
@@ -196,6 +196,7 @@ API path version: /v1. OpenAPI document revision is not a new API path version.
 
 ## Contract
 - Authorization: Bearer <server-side partner API key>. Never put the key in browser/widget code.
+- Auto-bleed is API-managed before a cart becomes open: 2 mm on a 63 x 88 mm finished card, using the website mask/corner rules. Partners submit finished artwork without implementing bleed. Recognized existing 2 mm bleed is preserved; 3 mm is cropped to 2 mm. Example: 1500x2100 becomes 1596x2196. Optional SHA-256 checks the original source, not the prepared file. Dashboard/production use prepared files. Both original and prepared files are private, cart-scoped, and share expiry/retention/holds. Source and prepared files each must fit 20 MiB and 40 MP. Existing orders are not retroactively processed.
 - Optional POST /v1/uploads with {content_type: "image/png" or "image/jpeg", size: file byte count} returns 201 {upload_url, method: "PUT", headers: {"Content-Type": ...}, image_url, upload_expires_at, expires_at, max_bytes: 20971520}. No partner Blob/Supabase account or hosting is needed. PUT raw bytes to upload_url with only the returned headers, no API key/cookies. Upload link lasts 2 hours and cannot overwrite. After successful PUT, use image_url unchanged in the existing cart fields; no finalize call. Upload authorization uses the shared write rate limit; honor Retry-After. A failed/uncertain PUT can be retried with a fresh grant. The cart worker still performs all validation.
 - image_url is a private signed capability, scoped to the partner and key mode and valid for 8 days; do not log/share it. Create the cart promptly. Issuing key revocation disables source access. Source staging files are removed by maintenance after expiry (normally within the following day). Validated cart files follow the retention rules below. Test keys support uploads but cannot pay.
 - POST /v1/carts requires Idempotency-Key: 1–200 visible ASCII characters, no spaces. Body: items with image_url, quantity and item/shared back_image_url; optional hashes, external_ref, return_url and standard card_stock only.

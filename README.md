@@ -31,3 +31,9 @@ Deployment requirements: the existing `PARTNER_INTERNAL_SECRET` (at least 32 cha
 The existing maintenance cron removes expired `partner-uploads/YYYY-MM-DD/` staging objects after 8 days, normally within the following day. Validated `carts/` files continue to use normal expiry, order retention and hold handling. Keep validation and maintenance workers scheduled and authenticated. Deploy the API before clients that call the new endpoint.
 
 Run `node --test scripts/direct-uploads.test.mjs`, then `npm run build`. Public setup, schemas and examples are available at `/docs#uploads`, `/openapi.json` and `/llms.txt`.
+
+## API auto-bleed deployment
+
+Run `supabase/migrations/20261008000000_api_auto_bleed.sql` on the existing partner database **before deploying this code**. No partner/MagicPlaytest or dashboard integration changes are required. The background validation worker adds the website's default 2 mm bleed to front/back artwork, then exposes checkout. Recognized existing bleed is retained at 2 mm or cropped from 3 mm to 2 mm. Source hashes remain separate from print hashes; both files stay in the cart's private storage and expire together, with legal holds respected.
+
+The deployment must include `lib/assets/autobleed-mask.png` (configured in `next.config.js`) and the Sharp dependency. Test with `node --test scripts/auto-bleed.test.mjs scripts/direct-uploads.test.mjs`. Create a new cart after deploying: existing orders keep their stored files and are not automatically reprocessed.
