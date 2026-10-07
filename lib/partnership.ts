@@ -251,6 +251,14 @@ export async function sendDecisionEmail(request: PartnershipRequest) {
   return sendGmailMessage({ to: request.email, subject, text })
 }
 
+export async function sendRejectionEmail(request: PartnershipRequest, reason: string) {
+  return sendGmailMessage({
+    to: request.email,
+    subject: "Your TCGPlaytest partner access has been rejected",
+    text: `Hi ${request.full_name || request.business_name},\n\nYour TCGPlaytest partner access has been rejected. Your API keys and checkout widget can no longer create orders. Open carts and unshipped manufacturing orders are on hold.\n\nReason:\n${reason}\n\nPlease reply to this email if you have questions about this decision. Existing payments and any refunds are reviewed separately.\n\nTCGPlaytest Partnerships`,
+  })
+}
+
 export async function sendWidgetReadyEmail(request: PartnershipRequest) {
   if (request.status !== "approved" || request.api_blocked_at) {
     return { sent: false, reason: "Partner access is unavailable." }
