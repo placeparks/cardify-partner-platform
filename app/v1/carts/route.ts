@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { api, authenticate, checked, digest, json, publicCart, secret } from "@/lib/partner-api"
-import { ApiError, partnerReturnUrl, validateCart } from "@/lib/manufacturing-contract"
+import { ApiError, DEFAULT_CARD_BACK_PATH, partnerReturnUrl, validateCart } from "@/lib/manufacturing-contract"
 import { assertUploadOwner } from "@/lib/partner-uploads"
 import { scheduleCartValidation } from "@/lib/validation-dispatch"
 
@@ -12,7 +12,7 @@ export async function POST(request: Request) { return api(async () => {
   if (key.mode === "live" && (process.env.PARTNER_LIVE_ENABLED !== "true" || !(Number(process.env.PARTNER_MIN_IMAGE_WIDTH)>0) || !(Number(process.env.PARTNER_MIN_IMAGE_HEIGHT)>0))) throw new ApiError(503,"live_not_enabled","Live handoff awaits production configuration")
   const idempotency = request.headers.get("idempotency-key")
   if (!idempotency || !/^[\x21-\x7e]{1,200}$/.test(idempotency)) throw new ApiError(400, "invalid_request", "Idempotency-Key is required (1–200 printable characters)")
-  const body = validateCart(await json(request), Number(process.env.PARTNER_MAX_CARDS || 1000))
+  const body = validateCart(await json(request), Number(process.env.PARTNER_MAX_CARDS || 1000), new URL(DEFAULT_CARD_BACK_PATH, request.url).href)
   const returnUrl = partnerReturnUrl(body.return_url, key.partner.website_url)
   const requestHash = digest(JSON.stringify(body))
   const existing = checked(await db.from("partner_carts").select("*").eq("partner_id", key.partner_id).eq("mode", key.mode).eq("idempotency_key", idempotency).maybeSingle())
