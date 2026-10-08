@@ -1,0 +1,35 @@
+{
+  "scope": "Local CPU only: full image checks plus 2 mm bleed. Median of three warm runs. Not an end-to-end upload-speed measurement.",
+  "node": "v24.16.0",
+  "sharp": "0.33.5",
+  "results": [
+    {
+      "sample": "card-front-1500x2100",
+      "before_ms": 444.7,
+      "after_ms": 117.9,
+      "reduction_percent": 73,
+      "identical_output_bytes": true
+    },
+    {
+      "sample": "textured-back-1146x1600",
+      "before_ms": 956,
+      "after_ms": 343.1,
+      "reduction_percent": 64,
+      "identical_output_bytes": true
+    },
+    {
+      "sample": "large-front-3000x4200",
+      "before_ms": 1617.7,
+      "after_ms": 917.6,
+      "reduction_percent": 43,
+      "identical_output_bytes": true
+    },
+    {
+      "sample": "existing-2mm-1626x2250",
+      "before_ms": 176.3,
+      "after_ms": 24.7,
+      "reduction_percent": 86,
+      "identical_output_bytes": true
+    }
+  ]
+}
