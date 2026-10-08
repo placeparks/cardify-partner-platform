@@ -205,8 +205,12 @@ function patchCorners(imageData: { data: Uint8Array }, width: number, height: nu
   }
 }
 
-export async function preparePrintArtwork(bytes: Buffer) {
-  const metadata = await sharp(bytes, { limitInputPixels: 40_000_000, failOn: "warning" }).metadata()
+// Internal, fully decoded sRGB RGBA pixels from the validation worker. They are
+// consumed once: bleed repair may modify data in place, but never source bytes.
+export type DecodedPrintArtwork = { data: Buffer; width: number; height: number }
+
+export async function preparePrintArtwork(bytes: Buffer, decoded?: DecodedPrintArtwork) {
+  const metadata = decoded || await sharp(bytes, { limitInputPixels: 40_000_000, failOn: "warning" }).metadata()
   const width = metadata.width!, height = metadata.height!
   // Extremely small but readable files remain orderable. Use nearest-neighbor
   // enlargement only when bleed would round to zero pixels; it adds no detail.
@@ -226,7 +230,7 @@ export async function preparePrintArtwork(bytes: Buffer) {
   const bleedX = Math.max(1, Math.round(2 * width / 63)), bleedY = Math.max(1, Math.round(2 * height / 88))
   const outWidth = width + bleedX * 2, outHeight = height + bleedY * 2
   if (outWidth * outHeight > 40_000_000) throw new ApiError(422, "image_pixels_exceeded", "Artwork plus 2 mm bleed exceeds 40 MP")
-  const { data } = await sharp(bytes).toColourspace("srgb").ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const { data } = decoded || await sharp(bytes).toColourspace("srgb").ensureAlpha().raw().toBuffer({ resolveWithObject: true })
   await extrudeMaskedPixels({ data }, await maskAt(width, height), width, height)
   const output = Buffer.alloc(outWidth * outHeight * 4)
   // Native row copies avoid a JS loop over every center pixel. Only the
