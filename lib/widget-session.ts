@@ -68,7 +68,10 @@ export async function widgetSession(request: Request) {
   return session
 }
 function rpcResult(result: any) {
-  if (result?.error === "quota") throw new ApiError(429, "widget_limit", "Widget capacity reached. Please try again later or contact the partner.")
+  if (result?.error === "quota") throw new ApiError(429, "widget_limit", result.scope === "session"
+    ? "This checkout reached its image-upload limit. Contact the partner to increase capacity for this deck."
+    : result.scope === "day" ? "The partner reached its daily image-upload allowance. Please contact the partner or try again later."
+    : "Widget capacity reached. Please try again later or contact the partner.")
   if (result?.error === "unavailable") throw unavailable()
   if (result?.error === "conflict") throw new ApiError(409, "idempotency_conflict", "This session already contains different cards. Start a new checkout.")
   if (result?.error === "upload") throw new ApiError(403, "invalid_upload", "Use files uploaded in this widget session.")
@@ -96,7 +99,7 @@ export async function widgetUpload(request: Request) {
   if (!bucket || bucket.public || Number(bucket.file_size_limit) !== MAX_BYTES || !Array.isArray(mimeTypes) || mimeTypes.length !== 2 || !["image/png", "image/jpeg"].every(m => mimeTypes.includes(m))) throw new ApiError(503, "uploads_unavailable", "Configure the private partner-artwork bucket for PNG/JPEG, maximum 20 MiB.")
   const id = randomUUID(), path = `widget-uploads/${session.id}/${id}.${input.content_type === "image/png" ? "png" : "jpg"}`
   const upload = rpcResult(checked(await db.rpc("partner_widget_reserve_upload", { p_session: session.id, p_request: input.request_id, p_id: id, p_path: path, p_type: input.content_type, p_size: input.size,
-    p_session_limit: limit("WIDGET_UPLOADS_PER_SESSION", 100, 2000), p_daily_limit: limit("WIDGET_UPLOADS_PER_PARTNER_DAY", 500, 10000) })))
+    p_session_limit: limit("WIDGET_UPLOADS_PER_SESSION", 2000, 2000), p_daily_limit: limit("WIDGET_UPLOADS_PER_PARTNER_DAY", 10000, 10000) })))
   // Supabase tokens are fixed to one new object, cannot overwrite it, and last
   // two hours. Reserve a full 20 MiB slot even if the client declares less.
   const signed = checked(await db.storage.from(BUCKET).createSignedUploadUrl(upload.path, { upsert: false }))
