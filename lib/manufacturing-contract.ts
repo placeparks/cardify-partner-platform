@@ -36,7 +36,9 @@ function hash(value: unknown, field: string) {
   return value.toLowerCase()
 }
 
-export function validateCart(body: any, maxCards = 1000) {
+export const DEFAULT_CARD_BACK_PATH = "/partner-widget/default-card-back.jpg"
+
+export function validateCart(body: any, maxCards = 1000, defaultBackUrl?: string) {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new ApiError(400, "invalid_request", "Expected a JSON object")
   if (Object.hasOwn(body, "certification")) throw new ApiError(400, "invalid_request", "Remove certification. Accept partner terms once in the dashboard; the customer confirms image rights at checkout.")
   const allowed = ["items", "back_image_url", "back_sha256", "card_stock", "external_ref", "return_url"]
@@ -53,8 +55,8 @@ export function validateCart(body: any, maxCards = 1000) {
       if (count > maxCards) throw new ApiError(400, "invalid_request", `Maximum ${maxCards} cards per cart`)
       return {
         image_url: httpsUrl(item.image_url, "image_url"), sha256: hash(item.sha256, "sha256"), quantity: item.quantity,
-        back_image_url: httpsUrl(item.back_image_url ?? body.back_image_url, "client-supplied back_image_url"),
-        back_sha256: hash(item.back_image_url ? item.back_sha256 : body.back_sha256, "back_sha256"),
+        back_image_url: httpsUrl(item.back_image_url ?? body.back_image_url ?? defaultBackUrl, "back_image_url"),
+        back_sha256: hash(item.back_image_url != null ? item.back_sha256 : body.back_image_url != null ? body.back_sha256 : undefined, "back_sha256"),
       }
     } catch (error) { if (error instanceof ApiError) error.item_index = index; throw error }
   })
