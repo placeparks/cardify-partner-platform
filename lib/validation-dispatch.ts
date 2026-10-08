@@ -11,7 +11,7 @@ export function scheduleCartValidation(cart: { id: string; status: string }, pro
     after(async () => {
       try {
         const { validateQueuedArtwork } = await import("@/lib/ingest-artwork")
-        await validateQueuedArtwork(deadline)
+        await validateQueuedArtwork(deadline, cart.id)
       } catch {
         // Jobs remain durably queued/leased; cron recovers failed invocations.
         // Do not log customer image URLs or their signed storage credentials.
