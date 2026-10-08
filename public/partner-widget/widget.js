@@ -102,7 +102,7 @@
     return items.map(function (item, index) {
       var back = item && item.back != null ? item.back : sharedBack;
       if (!item || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || !item.front) throw new Error("Each design needs a front and a positive whole-number quantity.");
-      return { label: typeof item.label === "string" ? item.label : "Card " + (index + 1), front: cached(item.front), back: cached(back), quantity: item.quantity };
+      return { label: typeof item.label === "string" ? item.label : "Card " + (index + 1), front: cached(item.front), back: cached(back), sharedBack: cached(sharedBack), canSeparate: item.back != null && item.back !== sharedBack, quantity: item.quantity };
     });
   }
 
@@ -168,7 +168,8 @@
       var actions = element("div", "actions"), fresh = element("button", "secondary", "Use current designs"), proceed = element("button", "primary", "Proceed to checkout");
       fresh.type = proceed.type = "button"; fresh.hidden = true; proceed.disabled = true;
       actions.appendChild(fresh); actions.appendChild(proceed); footer.appendChild(actions); shell.appendChild(footer); dialog.appendChild(shell); root.appendChild(dialog); document.body.appendChild(host);
-      var done = false, busy = false, loading = true, items = null, page = 0, generation = 0, urls = [], pageSize = 6;
+      var done = false, busy = false, loading = true, items = null, sourceItems = null, page = 0, generation = 0, urls = [], pageSize = 6;
+      var separated = new Set(), layoutButtons = [], estimateGeneration = 0;
       var previousFocus = document.activeElement;
       function revokeUrls() { urls.forEach(function (url) { URL.revokeObjectURL(url); }); urls = []; }
       function finish() {
@@ -185,12 +186,53 @@
         close.disabled = busy; fresh.disabled = busy || loading;
         previous.disabled = busy || loading || page === 0;
         next.disabled = busy || loading || !items || (page + 1) * pageSize >= items.length;
+        layoutButtons.forEach(function (button) { button.disabled = busy || loading || Boolean(attempt); });
         proceed.textContent = busy ? "Preparing checkout…" : attempt ? "Resume checkout" : "Proceed to checkout";
         dialog.setAttribute("aria-busy", String(busy || loading));
       }
+      function refreshSummary() {
+        var orderItems = items || attempt.payload.items;
+        var quantity = orderItems.reduce(function (sum, item) { return sum + item.quantity; }, 0);
+        var revision = ++estimateGeneration;
+        count.textContent = quantity + " cards · " + orderItems.length + " designs";
+        price.textContent = "Loading print estimate…";
+        estimate(quantity).then(function (value) { if (!done && revision === estimateGeneration) price.textContent = "Estimated printing: $" + (value.subtotal_amount / 100).toFixed(2) + " USD. Shipping, tax and discounts are calculated at checkout."; })
+          .catch(function () { if (!done && revision === estimateGeneration) price.textContent = "Price estimate unavailable. Your final price will be shown before payment."; });
+      }
+      function applyLayout() {
+        items = [];
+        sourceItems.forEach(function (item, index) {
+          if (separated.has(index)) {
+            items.push({ label: item.label, front: item.front, back: item.sharedBack, quantity: item.quantity, sourceIndex: index, layoutControl: "combine" });
+            items.push({ label: item.label + " — reverse face", front: item.back, back: item.sharedBack, quantity: item.quantity });
+          } else {
+            items.push(Object.assign({}, item, { sourceIndex: index, layoutControl: item.canSeparate ? "separate" : undefined }));
+          }
+        });
+        page = Math.min(page, Math.floor((items.length - 1) / pageSize));
+        refreshSummary();
+      }
+      function layoutControl(item) {
+        var separate = item.layoutControl === "separate";
+        var section = element("div"), button = element("button", "secondary", separate ? "Print both faces separately" : "Print front and back together");
+        section.style.marginTop = "12px";
+        button.type = "button"; button.disabled = true;
+        button.setAttribute("aria-label", button.textContent + ": " + item.label);
+        var explanation = element("p", "muted", separate ? "Two cards, each with your shared back or the TCGPlaytest back." : "These faces print as two cards. Combine them to print one double-sided card.");
+        explanation.style.marginTop = "8px";
+        button.onclick = async function () {
+          if (done || loading || busy || attempt) return;
+          var quantity = items.reduce(function (sum, card) { return sum + card.quantity; }, 0);
+          if (separate && quantity + item.quantity > 1000) { update("Printing these faces separately would exceed the 1,000-card limit.", true); return; }
+          if (separate) separated.add(item.sourceIndex); else separated.delete(item.sourceIndex);
+          applyLayout(); await renderPage();
+        };
+        layoutButtons.push(button); section.appendChild(button); section.appendChild(explanation);
+        return section;
+      }
       async function renderPage() {
         var current = ++generation;
-        loading = true; controls(); revokeUrls(); grid.replaceChildren();
+        loading = true; controls(); revokeUrls(); grid.replaceChildren(); layoutButtons = []; content.scrollTop = 0;
         update("Preparing your card previews…");
         if (!items) {
           grid.appendChild(element("p", "empty", "A previously submitted checkout is saved. Its card previews are no longer available after reloading. Resume that order, or choose Use current designs to review a new one."));
@@ -211,6 +253,7 @@
               img.alt = item.label + " — " + side; frame.appendChild(img);
               jobs.push({ item: item, side: side, img: img, figure: figure });
             }
+            if (item.layoutControl && !attempt) card.appendChild(layoutControl(item));
           }
           async function previewWorker() {
             while (!previewError && !done && current === generation && nextPreview < jobs.length) {
@@ -253,14 +296,11 @@
         loading = true; controls(); fresh.hidden = !attempt;
         quality.hidden = true;
         try {
-          items = attempt ? (attempt.items || null) : snapshotItems(config.getItems ? await config.getItems() : config.items);
+          sourceItems = attempt ? (attempt.items || null) : snapshotItems(config.getItems ? await config.getItems() : config.items);
           if (done) return;
-          var orderItems = items || attempt.payload.items;
-          var quantity = orderItems.reduce(function (sum, item) { return sum + item.quantity; }, 0);
-          count.textContent = quantity + " cards · " + orderItems.length + " designs";
-          estimate(quantity).then(function (value) { if (!done) price.textContent = "Estimated printing: $" + (value.subtotal_amount / 100).toFixed(2) + " USD. Shipping, tax and discounts are calculated at checkout."; })
-            .catch(function () { if (!done) price.textContent = "Price estimate unavailable. Your final price will be shown before payment."; });
-          page = 0; await renderPage();
+          page = 0; separated.clear();
+          if (attempt) { items = sourceItems; refreshSummary(); } else applyLayout();
+          await renderPage();
         } catch (error) {
           if (done) return;
           loading = false; controls(); proceed.disabled = true; fresh.hidden = false;
