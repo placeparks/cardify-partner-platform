@@ -98,14 +98,18 @@ export async function downloadArtworkSource(source: string) {
 
 // Called after a new cart response and by the scheduled recovery worker.
 // Cart responses never wait for downloads. URL deduplication is cart-scoped.
-export async function validateQueuedArtwork(deadline=Date.now()+40000) {
+export async function validateQueuedArtwork(deadline=Date.now()+40000, cartId?: string) {
   const result={checked:0,failures:0}
   let stopped=false
   const acquireProcessing=processingBudget()
   async function worker() {
     try {
       while (!stopped && Date.now()+20000<deadline) {
-        const [job]=checked(await db.rpc("partner_claim_validation"))||[]
+        // Immediate work belongs to the cart which scheduled it. Cron still
+        // drains the global queue, including recovery after interrupted runs.
+        const [job]=checked(await (cartId
+          ? db.rpc("partner_claim_cart_validation", { p_cart: cartId })
+          : db.rpc("partner_claim_validation")))||[]
         if (!job) break
         let errorCode:string|null=null
         let releaseProcessing:(()=>void)|undefined
