@@ -3,23 +3,58 @@ import { checked, digest } from "@/lib/partner-api"
 import { ApiError } from "@/lib/manufacturing-contract"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { safeRequest } from "@/lib/safe-download"
-import { preparePrintArtwork, PRINT_PROCESSING_VERSION } from "@/lib/print-bleed"
+import { preparePrintArtwork, PRINT_PROCESSING_VERSION, type DecodedPrintArtwork } from "@/lib/print-bleed"
 
-export async function preflight(bytes: Buffer) {
+async function artworkMetadata(bytes: Buffer) {
   if (bytes.length>20*1024*1024) throw new ApiError(422,"image_too_large","Image exceeds 20 MiB")
   let metadata: Metadata
   try { metadata=await sharp(bytes,{limitInputPixels:false}).metadata() }
   catch { throw new ApiError(422,"image_invalid","Invalid image") }
   if (!["png","jpeg"].includes(metadata.format||"") || !metadata.width || !metadata.height || (metadata.pages||1)!==1) throw new ApiError(422,"image_invalid","Single-frame PNG/JPEG required")
   if (metadata.width*metadata.height>40_000_000) throw new ApiError(422,"image_pixels_exceeded","Image exceeds 40 MP")
+  return metadata
+}
+
+async function decodeArtwork(bytes: Buffer, metadata: Metadata, forPrint = false) {
   // Decode every pixel to reject truncated/corrupt files. Statistics also did
   // expensive entropy, sharpness and channel analysis that checkout never uses.
-  try { await sharp(bytes,{limitInputPixels:40_000_000,failOn:"warning"}).raw().toBuffer() }
+  let decoded: DecodedPrintArtwork | undefined
+  try {
+    const image=sharp(bytes,{limitInputPixels:40_000_000,failOn:"warning"})
+    if (forPrint) {
+      const {data,info}=await image.toColourspace("srgb").ensureAlpha().raw().toBuffer({resolveWithObject:true})
+      decoded={data,width:info.width,height:info.height}
+    } else await image.raw().toBuffer()
+  }
   catch { throw new ApiError(422,"image_invalid","Image could not be fully decoded") }
   const recommendedWidth=Number(process.env.PARTNER_MIN_IMAGE_WIDTH)||744, recommendedHeight=Number(process.env.PARTNER_MIN_IMAGE_HEIGHT)||1040
-  const warning=metadata.width<recommendedWidth || metadata.height<recommendedHeight
+  const warning=metadata.width!<recommendedWidth || metadata.height!<recommendedHeight
     ? {code:"image_low_resolution",width:metadata.width,height:metadata.height,recommended_width:recommendedWidth,recommended_height:recommendedHeight,message:"Low-resolution artwork may print blurry or pixelated. You can still order it."} : null
-  return {sha256:digest(bytes),contentType:metadata.format==="png"?"image/png":"image/jpeg",warning}
+  return {sha256:digest(bytes),contentType:metadata.format==="png"?"image/png":"image/jpeg",warning,decoded}
+}
+
+export async function preflight(bytes: Buffer) {
+  const {decoded,...file}=await decodeArtwork(bytes,await artworkMetadata(bytes))
+  return file
+}
+
+function processingBudget() {
+  let available=4
+  const waiting: {weight:number;resolve:(release:()=>void)=>void}[]=[]
+  function drain() {
+    while (waiting.length && waiting[0].weight<=available) {
+      const {weight,resolve}=waiting.shift()!
+      available-=weight
+      let released=false
+      resolve(()=>{ if (!released) { released=true;available+=weight;drain() } })
+    }
+  }
+  // Four normal card images, two 12 MP masters, or one 40 MP image. Hold the
+  // permit through storage so decoded/source/output buffers cannot accumulate.
+  return (pixels:number)=>new Promise<()=>void>(resolve=>{
+    waiting.push({weight:Math.min(4,Math.max(1,Math.ceil(pixels/10_000_000))),resolve})
+    drain()
+  })
 }
 
 async function storeCheckedFile(path: string, bytes: Buffer, file: {sha256:string;contentType:string}) {
@@ -66,12 +101,14 @@ export async function downloadArtworkSource(source: string) {
 export async function validateQueuedArtwork(deadline=Date.now()+40000) {
   const result={checked:0,failures:0}
   let stopped=false
+  const acquireProcessing=processingBudget()
   async function worker() {
     try {
       while (!stopped && Date.now()+20000<deadline) {
         const [job]=checked(await db.rpc("partner_claim_validation"))||[]
         if (!job) break
         let errorCode:string|null=null
+        let releaseProcessing:(()=>void)|undefined
         try {
           if (job.attempts>3) throw new ApiError(422,"validation_unavailable","Worker retry limit reached")
           let bytes:Buffer|undefined
@@ -84,7 +121,9 @@ export async function validateQueuedArtwork(deadline=Date.now()+40000) {
             if (download.status!==200) throw new ApiError(422,"image_unreachable","Image URL did not return 200")
             bytes=download.bytes
           }
-          const file=await preflight(bytes)
+          const metadata=await artworkMetadata(bytes)
+          releaseProcessing=await acquireProcessing(metadata.width!*metadata.height!)
+          const file=await decodeArtwork(bytes,metadata,true)
           if (!checked(await db.rpc("partner_reserve_validation",{p_job:job.id,p_lease:job.lease_token,p_hash:file.sha256,p_type:file.contentType}))) continue
           const [qualityResult,blockResult]=await Promise.all([
             db.rpc("partner_record_artwork_quality",{p_job:job.id,p_lease:job.lease_token,p_warning:file.warning}),
@@ -110,7 +149,7 @@ export async function validateQueuedArtwork(deadline=Date.now()+40000) {
                   if (digest(candidate)===job.print_sha256) printBytes=candidate
                 }
               }
-              printBytes ||= await preparePrintArtwork(sourceBytes)
+              printBytes ||= await preparePrintArtwork(sourceBytes,file.decoded)
               // Existing 2 mm artwork is returned unchanged, so its exact bytes
               // have already passed full decoding, size, format and hash checks.
               const printFile=printBytes===sourceBytes?file:await preflight(printBytes)
@@ -125,6 +164,7 @@ export async function validateQueuedArtwork(deadline=Date.now()+40000) {
           if (!checked(await db.rpc("partner_reserve_print_artwork",{p_job:job.id,p_lease:job.lease_token,p_hash:printFile.sha256,p_version:PRINT_PROCESSING_VERSION}))) continue
           if (printFile.sha256!==file.sha256) await storeCheckedFile(`carts/${job.cart_id}/${printFile.sha256}`,printBytes,printFile)
         } catch (error) { result.failures++;errorCode=error instanceof ApiError ? error.code : "validation_unavailable" }
+        finally { releaseProcessing?.() }
         checked(await db.rpc("partner_finish_validation",{p_job:job.id,p_lease:job.lease_token,p_error:errorCode}))
         result.checked++
       }
@@ -133,10 +173,10 @@ export async function validateQueuedArtwork(deadline=Date.now()+40000) {
       throw error
     }
   }
-  // Claims are leased atomically by the database. Limit decoding/bleed work to
-  // two jobs to bound memory for large images, and retain the deadline buffer.
+  // Claims are leased atomically by the database. Overlap downloads and checks
+  // for four files; the weighted budget further limits large-image processing.
   // Drain already claimed jobs even if another worker hits a database failure.
-  const outcomes=await Promise.allSettled([worker(),worker()])
+  const outcomes=await Promise.allSettled([worker(),worker(),worker(),worker()])
   for (const outcome of outcomes) if (outcome.status==="rejected") throw outcome.reason
   return result
 }
