@@ -23,7 +23,6 @@ export const validationErrors = [
   ["image_timeout", "The 15-second total download deadline was exceeded, including DNS, TLS, redirects and body reads."],
   ["image_too_large", "Source or prepared print image exceeds 20 MiB (20,971,520 bytes)."],
   ["image_invalid", "Not a fully decodable, single-frame PNG/JPEG."],
-  ["image_dimensions_invalid", "Below the configured minimum width or height."],
   ["image_pixels_exceeded", "Source or image including automatic bleed exceeds 40,000,000 pixels (width × height)."],
   ["image_hash_mismatch", "An optional supplied SHA-256 does not match the downloaded bytes."],
   ["content_blocked", "This artwork cannot be accepted."],
@@ -40,7 +39,7 @@ const orderId = "00000000-0000-4000-a000-000000000042"
 export function documentationExamples(baseUrl: string) {
   const validating = {
     id: cartId, status: "validating", external_ref: "store-order-1042", card_count: 3,
-    card_stock: "standard", affiliate_code: null, progress: { done: 0, total: 2 }, errors: [],
+    card_stock: "standard", affiliate_code: null, progress: { done: 0, total: 2 }, errors: [], warnings: [],
     partner_terms_version: TERMS_VERSION, mode: "test", order_id: null,
     expires_at: "2026-10-13T12:00:00.000Z", created_at: "2026-10-06T12:00:00.000Z",
   }
@@ -49,7 +48,7 @@ export function documentationExamples(baseUrl: string) {
     validating,
     open: { ...validating, status: "open", progress: { done: 2, total: 2 }, checkout_url: `${baseUrl}/partner-checkout/${"b".repeat(64)}` },
     failed: { ...validating, status: "failed", progress: { done: 2, total: 2 }, errors: [
-      { item_index: 0, side: "front", code: "image_dimensions_invalid", message: "Image is smaller than the required dimensions." },
+      { item_index: 0, side: "front", code: "image_invalid", message: "Image is not a readable PNG or JPEG." },
       { item_index: 0, side: "back", code: "image_unreachable", message: "Image could not be downloaded." },
     ] },
     order: { id: orderId, cart_id: cartId, status: "shipped", shipment,
@@ -93,6 +92,10 @@ export function buildOpenApi(config = documentationConfig()) {
     security: [{ PartnerApiKey: [] }],
     tags: [{ name: "Uploads" }, { name: "Carts" }, { name: "Orders" }, { name: "Widget" }],
     paths: {
+      "/v1/estimate": { get: { operationId: "estimatePrinting", security: [], summary: "Estimate standard-card printing before uploading",
+        description: "Amounts are USD cents. Shipping, tax and discounts are excluded. Checkout recalculates the final price. A temporary estimate failure never blocks cart creation.",
+        parameters: [{name:"quantity",in:"query",required:true,schema:{type:"integer",minimum:1,maximum:1000}}],
+        responses: {"200":{description:"Printing estimate",content:{"application/json":{schema:object({currency:{type:"string",const:"USD"},quantity:{type:"integer"},unit_amount:{type:"integer"},subtotal_amount:{type:"integer"},excludes:{type:"array",items:{type:"string"}}})}}},...errors([400,503])} } },
       "/api/widget/sessions": { post: {
         operationId: "startWidgetSession", tags: ["Widget"], security: [], summary: "Start a standalone widget session using a public partner code",
         description: "The browser Origin must match the registered website or an additional widget origin. Requires active partnership and current terms. No API key. Defaults to at most 60 new sessions per partner/hour; the operator may override this. Token expires in one hour and authorizes only this session's uploads and one cart.",
@@ -108,7 +111,7 @@ export function buildOpenApi(config = documentationConfig()) {
       }},
       "/api/widget/cart": {
         post:{operationId:"createWidgetCart",tags:["Widget"],security:[{WidgetSession:[]}],summary:"Create this session's single cart",description:"Send Origin and session bearer token. Upload IDs must belong to this session. Identical retries reuse the cart; changed inputs need a new session. No Idempotency-Key header, API key, certification or affiliate_code field. Attribution and terms are set by the backend.",
-          requestBody:{required:true,content:{"application/json":{schema:object({items:{type:"array",minItems:1,maxItems:config.maxCards,items:object({front_upload_id:{type:"string",format:"uuid"},back_upload_id:{type:"string",format:"uuid"},quantity})},external_ref:externalRef},["items"])}}},
+          requestBody:{required:true,content:{"application/json":{schema:object({items:{type:"array",minItems:1,maxItems:config.maxCards,items:object({front_upload_id:{type:"string",format:"uuid"},back_upload_id:{type:"string",format:"uuid"},quantity},["front_upload_id","quantity"])},external_ref:externalRef},["items"])}}},
           responses:{"202":cartResponse("Queued for validation",{validating:e.validating}),"200":cartResponse("Existing cart",{open:e.open,failed:e.failed}),...errors([400,401,403,409,413,429,500,503])}},
         get:{operationId:"getWidgetCart",tags:["Widget"],security:[{WidgetSession:[]}],summary:"Poll only the session's cart",description:"Send Origin and session bearer token. No arbitrary cart ID parameter. Poll every 3–5 seconds; reads are exempt from upload/session quotas. Follow checkout_url only when open.",responses:{"200":cartResponse("Current cart",{validating:e.validating,open:e.open,failed:e.failed}),...errors([401,403,404,500])}},
       },
@@ -126,7 +129,7 @@ export function buildOpenApi(config = documentationConfig()) {
       } },
       "/v1/carts": { post: {
         operationId: "createCart", tags: ["Carts"], summary: "Queue URL validation and create a cart",
-        description: `Returns 202 immediately while a separate worker checks artwork and prepares default 2 mm bleed on every front/back; recognized existing 2 mm bleed is preserved and 3 mm is cropped to 2 mm. Source hashes always refer to submitted bytes, and production uses the prepared image. The source and prepared file must each meet the size/pixel limits; no checkout_url until open. Request JSON is limited to 512,000 bytes. Maximum ${config.maxCards} items AND ${config.maxCards} total copies. Downloads allow 20 MiB/file, 40 MP, minimum ${config.minWidth}×${config.minHeight}, 3 redirects and a 15-second total deadline per URL attempt. Identical retries with the same key return the original cart (202 validating; 200 otherwise). A failed cart requires corrected inputs and a new Idempotency-Key, not a new API key. Default deployment cart lifetime: ${config.expiryHours} hours from creation.`,
+        description: `Returns 202 immediately while a separate worker checks artwork and prepares default 2 mm bleed on every front/back; recognized existing 2 mm bleed is preserved and 3 mm is cropped to 2 mm. Source hashes always refer to submitted bytes, and production uses the prepared image. The source and prepared file must each meet the size/pixel limits; no checkout_url until open. Request JSON is limited to 512,000 bytes. Maximum ${config.maxCards} items AND ${config.maxCards} total copies. Downloads allow 20 MiB/file, 40 MP, recommended ${config.minWidth}×${config.minHeight}; smaller readable images remain orderable with image_low_resolution warnings, 3 redirects and a 15-second total deadline per URL attempt. Identical retries with the same key return the original cart (202 validating; 200 otherwise). A failed cart requires corrected inputs and a new Idempotency-Key, not a new API key. Default deployment cart lifetime: ${config.expiryHours} hours from creation.`,
         parameters: [{ name: "Idempotency-Key", in: "header", required: true, description: "1–200 visible ASCII characters (0x21–0x7E); no spaces. Use a unique value per order revision. Scoped to partner + test/live mode; reuse only for identical retries.", schema: { type: "string", minLength: 1, maxLength: 200, pattern: "^[!-~]{1,200}$" }, example: "store-order-1042-rev1" }],
         requestBody: { required: true, content: { "application/json": { schema: ref("CreateCart"), example: createCartExample } } },
         responses: { "202": cartResponse("Artwork queued or still validating", {validating:e.validating}), "200": cartResponse("An idempotent replay of an existing cart which is no longer validating", {open:e.open,failed:e.failed}), ...errors([400,401,403,409,413,429,500,503]) },
@@ -165,15 +168,15 @@ export function buildOpenApi(config = documentationConfig()) {
         CreateCart: {
           ...object({
             items: { type: "array", minItems: 1, maxItems: config.maxCards, items: ref("CartItem") },
-            back_image_url: { ...imageUrl, description: `${imageUrl.description} Shared back used when an item does not supply its own back_image_url.` },
+            back_image_url: { ...imageUrl, description: `${imageUrl.description} Shared back used when an item does not supply its own back_image_url. If neither is supplied, TCGPlaytest provides its default card back.` },
             back_sha256: hash, card_stock: { type: "string", enum: ["standard"], default: "standard" }, external_ref: externalRef,
             return_url: { ...imageUrl, description: "HTTPS return URL on the exact registered website origin (scheme/host/port). Omit to use the registered website URL. Return navigation is not payment confirmation." },
           }, ["items"]),
-          allOf: [{ if: { not: { required: ["back_image_url"] } }, then: { properties: { items: { items: { required: ["back_image_url"] } } } } }],
           description: "Only these fields are accepted. Do not send certification, affiliate_code, partner-terms fields, prices or library IDs. Each item needs a back, supplied per item or shared at top level. Partner terms/affiliate settings are copied server-side.",
         },
         CartItem: object({ image_url: imageUrl, sha256: hash, quantity,
           back_image_url: { ...imageUrl, description: "Item-specific back; overrides the shared back. If supplied, back_sha256 also comes from this item, never the shared hash." }, back_sha256: hash }, ["image_url", "quantity"]),
+        QualityWarning: object({ item_index: {type:"integer",minimum:0}, side:{type:"string",enum:["front","back"]}, code:{type:"string",const:"image_low_resolution"}, message:string, width:{type:"integer"}, height:{type:"integer"}, recommended_width:{type:"integer"}, recommended_height:{type:"integer"} }),
         ValidationError: object({ item_index: { type: "integer", minimum: 0, description: "Zero-based index in the submitted items array." }, side: { type: "string", enum: ["front","back"] }, code: { type: "string", enum: validationErrors.map(([code]) => code) }, message: string }),
         Cart: {
           ...object({
@@ -181,10 +184,10 @@ export function buildOpenApi(config = documentationConfig()) {
             external_ref: nullableString, card_count: { type: "integer", minimum: 1, description: "Sum of item quantities, not the number of URLs." }, card_stock: { type: "string", enum: ["standard"] },
             affiliate_code: { ...nullableString, description: "Saved account preference copied at cart creation; null when none. Read-only." },
             progress: object({ done: { type: "integer", minimum: 0, description: "Finished unique-URL jobs, including failures." }, total: { type: "integer", minimum: 0, description: "Distinct front/back URLs in this cart, not card copies." } }),
-            errors: { type: "array", items: ref("ValidationError") }, partner_terms_version: { ...nullableString, description: "Accepted partner version recorded server-side. Can be null on older carts." },
+            errors: { type: "array", items: ref("ValidationError") }, warnings: { type:"array", items:ref("QualityWarning"), description:"Advisory only. Low-resolution artwork remains orderable after a customer warning." }, partner_terms_version: { ...nullableString, description: "Accepted partner version recorded server-side. Can be null on older carts." },
             mode: { type: "string", enum: ["test","live"] }, checkout_url: { type: "string", format: "uri", description: "Present only when open. Use verbatim; do not construct a URL or substitute the API origin. Test mode opens a non-paying preview." },
             order_id: { ...nullableString, description: "Manufacturing order identifier after payment is recorded; otherwise null." }, expires_at: timestamp, created_at: timestamp,
-          }, ["id","status","external_ref","card_count","card_stock","affiliate_code","progress","errors","partner_terms_version","mode","order_id","expires_at","created_at"]),
+          }, ["id","status","external_ref","card_count","card_stock","affiliate_code","progress","errors","warnings","partner_terms_version","mode","order_id","expires_at","created_at"]),
           allOf: [{ if: { properties: { status: { const: "open" } }, required: ["status"] }, then: { required: ["checkout_url"] }, else: { not: { required: ["checkout_url"] } } }],
         },
         Shipment: object({ carrier: { type: "string", maxLength: 80 }, tracking_number: { type: "string", maxLength: 150 }, tracking_url: { type: "string", format: "uri", description: "HTTPS tracking link." } }),
@@ -218,27 +221,26 @@ API path version: /v1. OpenAPI document revision is not a new API path version.
 - Auto-bleed is API-managed before a cart becomes open: 2 mm on a 63 x 88 mm finished card, using the website mask/corner rules. Partners submit finished artwork without implementing bleed. Recognized existing 2 mm bleed is preserved; 3 mm is cropped to 2 mm. Example: 1500x2100 becomes 1596x2196. Optional SHA-256 checks the original source, not the prepared file. Dashboard/production use prepared files. Both original and prepared files are private, cart-scoped, and share expiry/retention/holds. Source and prepared files each must fit 20 MiB and 40 MP. Existing orders are not retroactively processed.
 - Optional POST /v1/uploads with {content_type: "image/png" or "image/jpeg", size: file byte count} returns 201 {upload_url, method: "PUT", headers: {"Content-Type": ...}, image_url, upload_expires_at, expires_at, max_bytes: 20971520}. No partner Blob/Supabase account or hosting is needed. PUT raw bytes to upload_url with only the returned headers, no API key/cookies. Upload link lasts 2 hours and cannot overwrite. After successful PUT, use image_url unchanged in the existing cart fields; no finalize call. Upload authorization uses the shared write rate limit; honor Retry-After. A failed/uncertain PUT can be retried with a fresh grant. The cart worker still performs all validation.
 - image_url is a private signed capability, scoped to the partner and key mode and valid for 8 days; do not log/share it. Create the cart promptly. Issuing key revocation disables source access. Source staging files are removed by maintenance after expiry (normally within the following day). Validated cart files follow the retention rules below. Test keys support uploads but cannot pay.
-- For batches, reuse a successful image_url for repeated artwork/shared backs within the cart. Use a small transfer concurrency limit, such as three; grant requests still share the API rate limit and must honor Retry-After. Create the cart only after every required upload succeeds. New API and widget carts start background validation after the cart response; the scheduled worker recovers unfinished jobs. Continue polling until open. Upload success alone does not open checkout.
-- POST /v1/carts requires Idempotency-Key: 1–200 visible ASCII characters, no spaces. Body: items with image_url, quantity and item/shared back_image_url; optional hashes, external_ref, return_url and standard card_stock only.
+- POST /v1/carts requires Idempotency-Key: 1–200 visible ASCII characters, no spaces. Body: items with image_url, quantity and optional item/shared back_image_url (omitting both backs selects the TCGPlaytest default); optional hashes, external_ref, return_url and standard card_stock only.
 - Do not send certification, affiliate_code, prices or partner-terms fields. Terms version and saved affiliate preference are copied by the server. The customer certifies image rights at checkout; the partner still has the obligations above.
 - New POST returns 202, status validating, no checkout_url. GET /v1/carts/{id} every 3–5 seconds; honor Retry-After. Polling is authenticated but exempt from the ${config.rateLimit}/minute/key write/order limit.
 - Redirect only for open, using checkout_url verbatim. For failed, inspect every errors entry (item_index is zero-based; side, code, message), fix inputs and create a new cart with a new Idempotency-Key. Do not rotate the API key. Other terminal states: converted, expired, blocked, cancelled.
 - Maximum ${config.maxCards} items AND ${config.maxCards} total quantity; JSON body ≤512,000 bytes; external_ref ≤200 UTF-16 code units; HTTPS URLs ≤2048 UTF-16 code units.
-- Artwork: public IPv4 HTTPS, PNG/JPEG single frame, ≤20 MiB, ≤40,000,000 pixels, at least ${config.minWidth}×${config.minHeight}. At most 3 redirects. Total download deadline 15 seconds per URL attempt, including DNS/TLS/redirects/body. Private/local addresses are blocked.
+- Artwork: public IPv4 HTTPS, PNG/JPEG single frame, ≤20 MiB, ≤40,000,000 pixels, recommended ${config.minWidth}×${config.minHeight}. Smaller readable files are accepted with warnings (code image_low_resolution, item_index, side, source width/height and recommended_width/recommended_height). Hosted checkout allows ordering after acknowledging the warning. At most 3 redirects. Total download deadline 15 seconds per URL attempt, including DNS/TLS/redirects/body. Private/local addresses are blocked.
 - Optional SHA-256 is 64 hex characters over exact file bytes; a mismatch fails that item/side. Each URL is checked within its cart; validated files are never reused across carts. No source downloads after payment. Existing public HTTPS URL integrations continue to work; direct uploads are optional. There is no finalize endpoint.
 - Current deployment: cart lifetime ${config.expiryHours} hours from creation; retention ${config.retentionDays} days after shipment/cancellation, subject to reconciliation and legal holds. expires_at is authoritative; all timestamp strings use RFC 3339 with timezone.
 - GET /v1/orders/{id} uses cart.order_id or an order webhook data.id. It returns id, cart_id, status, shipment, created_at, updated_at, external_ref and card_count. Browser return is not proof of payment.
 - Webhooks: order.paid, order.in_production, order.shipped, order.cancelled, cart.expired. Envelope: id, type, created_at, data. Deduplicate by top-level id. Verify TCGP-Signature (t=Unix seconds,v1=hex HMAC-SHA256) over timestamp + "." + exact raw body, with the signing secret, constant-time comparison and ±300-second tolerance. Respond 2xx after durable receipt. Up to 12 attempts; no delivery-order guarantee.
 - Webhook endpoints must share the registered website origin. Test/live settings and secrets are separate; saving rotates the secret. Test keys validate artwork and may receive cart.expired, but cannot create paid/production/shipment events. No synthetic-event endpoint is provided.
+- GET /v1/estimate?quantity=10 is public, no API key. Returns currency USD, quantity, unit_amount and subtotal_amount (integer cents), excludes shipping/tax/discounts. Final price is recalculated at checkout. Estimate failures do not block checkout.
 ## Standalone widget (no partner secret API key or partner storage)
 - Copy the personalized script from the dashboard after accepting terms. data-partner-key is the public widget_partner_key, not an API secret. data-mode is test (non-paying preview) or live. Register each exact HTTPS website origin in the dashboard.
-- After script load call TCGPlaytest.configure({getItems: async () => ({sharedBack: backFile, items: [{label: "My card", front: finishedPngBlob, quantity: 1}]})}). The widget applies sharedBack to every design, overriding individual/generated backs in both previews and uploads. Omit sharedBack and supply back on each item to keep different backs; the original array return shape is also supported. label is optional. Front/back/sharedBack can also be async Blob factories. Partners supply images and quantities; the widget owns back selection and the checkout UI. The default button opens a TCGPlaytest-branded review modal with front/back previews, quantities and a Proceed to checkout button. Uploads and validation begin only after the customer proceeds, then hosted checkout collects details, rights certification and payment. For a custom export button use data-auto-button="false" and TCGPlaytest.open(); keep the default dialog enabled.
-- Previews show the supplied artwork; the backend adds 2 mm bleed during validation. The modal paginates six designs at a time and caches rendered files for that attempt. Closing before proceeding creates no uploads or cart. Resume checkout retries the existing order; Use current designs starts a new one. After refresh, a saved cart can resume without previews and is explicitly labelled as such.
-- The widget uploads up to three files concurrently, reuses a shared-back Blob's in-flight/completed upload, and keeps successful uploads for retries in the same page/attempt. It waits for active transfers before reporting failure; it never creates a cart with incomplete uploads. No extra partner configuration is needed. Session expiry can require a new attempt. Existing upload quotas still apply.
+- After script load call TCGPlaytest.configure({getItems: async () => [{front: finishedPngBlob, back: backFile, quantity: 1}]}). Front/back can also be async Blob factories. The default button handles uploads, validation progress and redirect. For a custom button use data-auto-button="false" and TCGPlaytest.open().
+- Item back takes priority over sharedBack; omit both to use the centrally hosted TCGPlaytest default. A double-sided card must supply its matching back. The modal renders up to three previews at once, shows low-resolution warnings, and fetches a print estimate immediately. TCGPlaytest.estimate(quantity) exposes that estimate for editor UI. No upload is needed for the default back.
 - Call TCGPlaytest.reset() after editing a previously submitted deck. Network retries and same-tab reloads resume the same submitted cart. The public-code widget does not call a partner-owned cart endpoint.
 - POST /api/widget/sessions with {partner_key,mode} returns {token,expires_at,mode,max_cards,max_image_bytes}. Session lives one hour, is scoped to a partner, origin and mode, and can create only one cart.
 - With Authorization: Bearer <session token>, POST /api/widget/uploads with {request_id: UUID,content_type,size} returns {id,upload_url,method,headers,max_bytes,upload_expires_at}. PUT bytes directly to the returned URL without Authorization/cookies. Storage grants last two hours and cannot overwrite.
-- POST /api/widget/cart with {items:[{front_upload_id,back_upload_id,quantity}],external_ref?}; only session-owned uploads accepted. GET /api/widget/cart polls that same cart. Both return the documented Cart shape. Use Origin and the session token on these calls, never a secret API key.
+- POST /api/widget/cart with {items:[{front_upload_id,back_upload_id?,quantity}],external_ref?}; only session-owned uploads accepted. GET /api/widget/cart polls that same cart. Both return the documented Cart shape. Use Origin and the session token on these calls, never a secret API key.
 - Defaults: 60 sessions/partner/hour, 100 grants/session, 500 grants/partner/rolling 24 hours; reserve 20 MiB per grant. Operators can adjust quotas. Cart GET is exempt. Honor Retry-After on 429.
 - Partner terms, affiliate setting, order ownership and analytics are assigned server-side. Public codes and Origin checks alone do not authenticate non-browser callers; expiring sessions, quotas and ownership checks limit public upload access.
 `
