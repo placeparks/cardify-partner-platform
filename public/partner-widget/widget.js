@@ -9,6 +9,21 @@
   var defaults = { cartEndpoint: settings.cartEndpoint || "/api/tcgplaytest/cart", statusEndpoint: settings.cartStatusEndpoint };
   var activeRequest = null;
   var standaloneConfig = {}, attempt = null;
+  var estimates = new Map();
+  function estimate(quantity) {
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) return Promise.reject(new Error("Choose 1–1,000 cards."));
+    if (estimates.has(quantity) && estimates.get(quantity).expires <= Date.now()) estimates.delete(quantity);
+    if (!estimates.has(quantity)) {
+      var pending = fetch(platformOrigin + "/v1/estimate?quantity=" + quantity, { credentials: "omit", signal: AbortSignal.timeout(10000) })
+        .then(async function (response) {
+          var value = await response.json();
+          if (!response.ok || value.currency !== "USD" || value.quantity !== quantity || !Number.isSafeInteger(value.subtotal_amount) || value.subtotal_amount < 0) throw new Error("Price estimate unavailable");
+          return value;
+        }).catch(function (error) { estimates.delete(quantity); throw error; });
+      estimates.set(quantity, { pending: pending, expires: Date.now() + 60000 });
+    }
+    return estimates.get(quantity).pending;
+  }
   var savedKey = "tcgp-widget:" + platformOrigin + ":" + settings.partnerKey + ":" + (settings.mode || "live");
 
   function saveAttempt() {
@@ -82,8 +97,8 @@
       return factories.get(value);
     }
     return items.map(function (item, index) {
-      var back = sharedBack == null ? item && item.back : sharedBack;
-      if (!item || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || !item.front || !back) throw new Error("Each design needs a front, a shared or individual back, and a positive whole-number quantity.");
+      var back = item && item.back != null ? item.back : sharedBack;
+      if (!item || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || !item.front) throw new Error("Each design needs a front and a positive whole-number quantity.");
       return { label: typeof item.label === "string" ? item.label : "Card " + (index + 1), front: cached(item.front), back: cached(back), quantity: item.quantity };
     });
   }
@@ -136,7 +151,10 @@
       var title = element("h1", "", "Review your cards"); title.id = "tcgp-review-title";
       intro.appendChild(title); intro.appendChild(element("p", "muted", "Check each front, matching back, and quantity before checkout."));
       var count = element("span", "count", "Preparing previews…"); summary.appendChild(intro); summary.appendChild(count); content.appendChild(summary);
-      content.appendChild(element("p", "notice", "We add 2 mm print bleed during artwork checks. Shipping, pricing, and image-rights confirmation follow at checkout."));
+      content.appendChild(element("p", "notice", "We add 2 mm print bleed during artwork checks. Cards without a supplied back use the TCGPlaytest back. Low-resolution artwork is accepted with a quality warning."));
+      var price = element("p", "notice", "Loading print estimate…"); content.appendChild(price);
+      var quality = element("p", "notice", "Some images are below the recommended 744 × 1040 pixels and may print blurry or pixelated. You can still order them. Continuing means you accept their print quality.");
+      quality.hidden = true; content.appendChild(quality);
       var grid = element("div", "grid"), pager = element("div", "pager");
       var previous = element("button", "", "Previous"), pageLabel = element("span"), next = element("button", "", "Next");
       previous.type = next.type = "button"; pager.appendChild(previous); pager.appendChild(pageLabel); pager.appendChild(next); pager.hidden = true;
@@ -179,6 +197,7 @@
         pager.hidden = items.length <= pageSize;
         pageLabel.textContent = "Designs " + (page * pageSize + 1) + "–" + Math.min((page + 1) * pageSize, items.length) + " of " + items.length;
         try {
+          var jobs = [], nextPreview = 0, previewError = null;
           for (var i = page * pageSize; i < Math.min((page + 1) * pageSize, items.length); i++) {
             var item = items[i], card = element("article", "card"), heading = element("div", "card-heading");
             heading.appendChild(element("span", "card-title", (i + 1) + ". " + item.label));
@@ -187,15 +206,38 @@
             for (var side of ["front", "back"]) {
               var figure = element("figure"), frame = element("div", "image"), img = element("img");
               figure.appendChild(element("figcaption", "", side)); figure.appendChild(frame); faces.appendChild(figure);
-              var blob = typeof item[side] === "function" ? await item[side]() : item[side];
-              if (done || current !== generation) return;
-              if (!(blob instanceof Blob) || ["image/png", "image/jpeg"].indexOf(blob.type) === -1 || !blob.size || blob.size > 20 * 1024 * 1024) throw new Error("Use PNG/JPEG images up to 20 MiB for every front and back.");
-              var url = URL.createObjectURL(blob); urls.push(url); img.src = url;
               img.alt = item.label + " — " + side; frame.appendChild(img);
-              await img.decode();
-              if (done || current !== generation) return;
+              jobs.push({ item: item, side: side, img: img, figure: figure });
             }
           }
+          async function previewWorker() {
+            while (!previewError && !done && current === generation && nextPreview < jobs.length) {
+              var job = jobs[nextPreview++];
+              try {
+                var value = job.item[job.side];
+                if (job.side === "back" && value == null) {
+                  job.img.src = platformOrigin + "/partner-widget/default-card-back.jpeg";
+                  job.figure.appendChild(element("small", "muted", "TCGPlaytest default back"));
+                } else {
+                  var blob = typeof value === "function" ? await value() : value;
+                  if (done || current !== generation) return;
+                  if (!(blob instanceof Blob) || ["image/png", "image/jpeg"].indexOf(blob.type) === -1 || !blob.size || blob.size > 20 * 1024 * 1024) throw new Error("Use PNG/JPEG images up to 20 MiB for every front and back.");
+                  var url = URL.createObjectURL(blob); urls.push(url); job.img.src = url;
+                }
+                await job.img.decode();
+                if (done || current !== generation) return;
+                if (job.img.naturalWidth * job.img.naturalHeight > 40000000) throw new Error("Images must be no larger than 40 megapixels.");
+                if (job.img.naturalWidth < 744 || job.img.naturalHeight < 1040) {
+                  quality.hidden = false;
+                  job.figure.appendChild(element("small", "muted", "Low resolution — may print blurry"));
+                }
+              } catch (error) { previewError = previewError || error; }
+            }
+          }
+          // Keep card order stable while decoding/rendering up to three faces.
+          await Promise.all([previewWorker(), previewWorker(), previewWorker()]);
+          if (done || current !== generation) return;
+          if (previewError) throw previewError;
           loading = false; controls(); update(attempt ? "This is your previous checkout. Resume it or use your current designs." : "Review your cards, then proceed when you’re ready.");
         } catch (error) {
           if (done || current !== generation) return;
@@ -206,11 +248,15 @@
       }
       async function load() {
         loading = true; controls(); fresh.hidden = !attempt;
+        quality.hidden = true;
         try {
           items = attempt ? (attempt.items || null) : snapshotItems(config.getItems ? await config.getItems() : config.items);
           if (done) return;
           var orderItems = items || attempt.payload.items;
-          count.textContent = orderItems.reduce(function (sum, item) { return sum + item.quantity; }, 0) + " cards · " + orderItems.length + " designs";
+          var quantity = orderItems.reduce(function (sum, item) { return sum + item.quantity; }, 0);
+          count.textContent = quantity + " cards · " + orderItems.length + " designs";
+          estimate(quantity).then(function (value) { if (!done) price.textContent = "Estimated printing: $" + (value.subtotal_amount / 100).toFixed(2) + " USD. Shipping, tax and discounts are calculated at checkout."; })
+            .catch(function () { if (!done) price.textContent = "Price estimate unavailable. Your final price will be shown before payment."; });
           page = 0; await renderPage();
         } catch (error) {
           if (done) return;
@@ -287,17 +333,17 @@
           }
         }
         var nextItem = 0, uploadError = null;
-        var completed = attempt.uploaded.filter(function (item) { return item && item.front_upload_id && item.back_upload_id; }).length;
+        var completed = attempt.uploaded.filter(function (item, index) { return item && item.front_upload_id && (!attempt.items[index].back || item.back_upload_id); }).length;
         progress("Uploaded " + completed + " of " + attempt.items.length + " designs…");
         async function uploadWorker() {
           while (!uploadError && nextItem < attempt.items.length) {
             var i = nextItem++, item = attempt.items[i];
             var partial = attempt.uploaded[i] || (attempt.uploaded[i] = { quantity: item.quantity });
-            if (partial.front_upload_id && partial.back_upload_id) continue;
+            if (partial.front_upload_id && (!item.back || partial.back_upload_id)) continue;
             try {
               if (!partial.front_upload_id) partial.front_upload_id = await upload(item.front);
               if (uploadError) return;
-              if (!partial.back_upload_id) partial.back_upload_id = await upload(item.back);
+              if (item.back && !partial.back_upload_id) partial.back_upload_id = await upload(item.back);
               completed++;
               progress("Uploaded " + completed + " of " + attempt.items.length + " designs…");
             } catch (error) { uploadError = uploadError || error; }
@@ -450,7 +496,7 @@
     });
     container.appendChild(error); container.appendChild(button); document.body.appendChild(container);
   }
-  window.TCGPlaytest = { open: open, reset: reset, configure: function (options) { standaloneConfig = Object.assign({}, standaloneConfig, options); }, standalone: Boolean(settings.partnerKey), review: true };
+  window.TCGPlaytest = { open: open, reset: reset, estimate: estimate, configure: function (options) { standaloneConfig = Object.assign({}, standaloneConfig, options); }, standalone: Boolean(settings.partnerKey), review: true };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();
 })();
