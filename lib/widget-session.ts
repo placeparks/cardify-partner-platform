@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { api, checked, digest, json, publicCart, secret } from "@/lib/partner-api"
-import { ApiError, hasPartnerTerms, validateCart } from "@/lib/manufacturing-contract"
+import { ApiError, DEFAULT_CARD_BACK_PATH, hasPartnerTerms, validateCart } from "@/lib/manufacturing-contract"
 import { scheduleCartValidation } from "@/lib/validation-dispatch"
 
 const BUCKET = "partner-artwork"
@@ -106,12 +106,12 @@ export async function widgetUpload(request: Request) {
 }
 export async function widgetCart(request: Request) {
   const session = await widgetSession(request), input = await json(request)
-  if (!input || Object.keys(input).some(k => !["items", "external_ref"].includes(k)) || !Array.isArray(input.items) || !input.items.length || input.items.length > Number(process.env.PARTNER_MAX_CARDS || 1000)) throw new ApiError(400, "invalid_request", "Send items with front_upload_id, back_upload_id and quantity.")
-  for (const item of input.items) if (!item || Object.keys(item).some(k => !["front_upload_id", "back_upload_id", "quantity"].includes(k)) || !uuid.test(item.front_upload_id || "") || !uuid.test(item.back_upload_id || "")) throw new ApiError(400, "invalid_request", "Use front/back upload IDs from this session.")
-  const ids = [...new Set<string>(input.items.flatMap((item: any) => [item.front_upload_id, item.back_upload_id]))]
+  if (!input || Object.keys(input).some(k => !["items", "external_ref"].includes(k)) || !Array.isArray(input.items) || !input.items.length || input.items.length > Number(process.env.PARTNER_MAX_CARDS || 1000)) throw new ApiError(400, "invalid_request", "Send items with front_upload_id and quantity. Include back_upload_id only for a custom or double-sided back.")
+  for (const item of input.items) if (!item || Object.keys(item).some(k => !["front_upload_id", "back_upload_id", "quantity"].includes(k)) || !uuid.test(item.front_upload_id || "") || (item.back_upload_id != null && !uuid.test(item.back_upload_id))) throw new ApiError(400, "invalid_request", "Use front/back upload IDs from this session. Omit the back to use the TCGPlaytest back.")
+  const ids = [...new Set<string>(input.items.flatMap((item: any) => [item.front_upload_id, item.back_upload_id].filter(Boolean)))]
   const uploads = checked(await db.from("partner_widget_uploads").select("id").eq("session_id", session.id).in("id", ids)) || []
   if (uploads.length !== ids.length) throw new ApiError(403, "invalid_upload", "Use files uploaded in this widget session.")
-  const body = validateCart({ items: input.items.map((item: any) => ({ image_url: sourceUrl(request, item.front_upload_id), back_image_url: sourceUrl(request, item.back_upload_id), quantity: item.quantity })), ...(input.external_ref !== undefined ? { external_ref: input.external_ref } : {}) }, Number(process.env.PARTNER_MAX_CARDS || 1000))
+  const body = validateCart({ items: input.items.map((item: any) => ({ image_url: sourceUrl(request, item.front_upload_id), ...(item.back_upload_id ? { back_image_url: sourceUrl(request, item.back_upload_id) } : {}), quantity: item.quantity })), ...(input.external_ref !== undefined ? { external_ref: input.external_ref } : {}) }, Number(process.env.PARTNER_MAX_CARDS || 1000), new URL(DEFAULT_CARD_BACK_PATH, request.url).href)
   const origin = session.mode === "test" ? new URL(request.url).origin : process.env.TCGPLAYTEST_CHECKOUT_ORIGIN
   if (!origin) throw new ApiError(503, "checkout_unavailable", "Checkout is not configured.")
   const hours = limit("PARTNER_CART_EXPIRY_HOURS", 168, 168), retention = Number(process.env.PARTNER_ARTWORK_RETENTION_DAYS || 30)
