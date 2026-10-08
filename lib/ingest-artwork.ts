@@ -12,7 +12,9 @@ export async function preflight(bytes: Buffer) {
   catch { throw new ApiError(422,"image_invalid","Invalid image") }
   if (!["png","jpeg"].includes(metadata.format||"") || !metadata.width || !metadata.height || (metadata.pages||1)!==1) throw new ApiError(422,"image_invalid","Single-frame PNG/JPEG required")
   if (metadata.width*metadata.height>40_000_000) throw new ApiError(422,"image_pixels_exceeded","Image exceeds 40 MP")
-  try { await sharp(bytes,{limitInputPixels:40_000_000,failOn:"warning"}).stats() }
+  // Decode every pixel to reject truncated/corrupt files. Statistics also did
+  // expensive entropy, sharpness and channel analysis that checkout never uses.
+  try { await sharp(bytes,{limitInputPixels:40_000_000,failOn:"warning"}).raw().toBuffer() }
   catch { throw new ApiError(422,"image_invalid","Image could not be fully decoded") }
   const recommendedWidth=Number(process.env.PARTNER_MIN_IMAGE_WIDTH)||744, recommendedHeight=Number(process.env.PARTNER_MIN_IMAGE_HEIGHT)||1040
   const warning=metadata.width<recommendedWidth || metadata.height<recommendedHeight
@@ -26,6 +28,37 @@ async function storeCheckedFile(path: string, bytes: Buffer, file: {sha256:strin
     const existing=checked(await db.storage.from("partner-artwork").download(path))
     if (!existing || digest(Buffer.from(await existing.arrayBuffer()))!==file.sha256) throw new Error("Storage unavailable")
   }
+}
+
+export async function downloadArtworkSource(source: string) {
+  const url = new URL(source)
+  const origins = [process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL, process.env.NEXT_PUBLIC_CARDIFY_APP_URL,
+    process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`]
+    .flatMap(value => { try { const parsed = new URL(value!); return parsed.protocol === "https:" ? [parsed.origin] : [] } catch { return [] } })
+  if (url.protocol === "https:" && !url.username && !url.password && !url.hash && origins.includes(url.origin)
+    && ["/v1/uploads/source", "/api/widget/source"].includes(url.pathname)) {
+    // Run the exact same source authorization locally, avoiding an HTTPS trip
+    // back into our own deployment. Never shortcut arbitrary external URLs or
+    // bypass grant signatures, revocation, expiry, terms or widget ownership.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const resolveSource = async () => url.pathname === "/v1/uploads/source"
+        ? (await import("@/lib/partner-uploads")).uploadSource(new Request(source))
+        : (await import("@/lib/widget-session")).widgetSource(new Request(source))
+      const download = async () => {
+        const response = await resolveSource()
+        const location = response.headers.get("Location")
+        if (response.status !== 307 || !location) throw new ApiError(422, "image_unreachable", "Artwork source unavailable")
+        // Keep the bounded downloader, DNS checks and total redirect allowance.
+        return safeRequest(location, { maxRedirects: 2 })
+      }
+      return await Promise.race([download(), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new ApiError(422, "image_timeout", "Artwork source timed out")), 15000)
+      })])
+    } finally { clearTimeout(timer) }
+  }
+  return safeRequest(source, { maxRedirects: 3 })
 }
 
 // Called after a new cart response and by the scheduled recovery worker.
@@ -47,14 +80,18 @@ export async function validateQueuedArtwork(deadline=Date.now()+40000) {
             if (saved.data) bytes=Buffer.from(await saved.data.arrayBuffer())
           }
           if (!bytes) {
-            const download=await safeRequest(job.source_url,{maxRedirects:3})
+            const download=await downloadArtworkSource(job.source_url)
             if (download.status!==200) throw new ApiError(422,"image_unreachable","Image URL did not return 200")
             bytes=download.bytes
           }
           const file=await preflight(bytes)
           if (!checked(await db.rpc("partner_reserve_validation",{p_job:job.id,p_lease:job.lease_token,p_hash:file.sha256,p_type:file.contentType}))) continue
-          if (!checked(await db.rpc("partner_record_artwork_quality",{p_job:job.id,p_lease:job.lease_token,p_warning:file.warning}))) continue
-          const blocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",file.sha256))||[]
+          const [qualityResult,blockResult]=await Promise.all([
+            db.rpc("partner_record_artwork_quality",{p_job:job.id,p_lease:job.lease_token,p_warning:file.warning}),
+            db.from("partner_content_blocks").select("sha256").eq("sha256",file.sha256),
+          ])
+          if (!checked(qualityResult)) continue
+          const blocked=checked(blockResult)||[]
           if (blocked.length) throw new ApiError(422,"content_blocked","Artwork blocked")
           const path=`carts/${job.cart_id}/${file.sha256}`
           // Keep the source hash for optional client SHA verification and takedowns.
