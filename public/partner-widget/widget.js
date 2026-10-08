@@ -10,6 +10,9 @@
   var activeRequest = null;
   var standaloneConfig = {}, attempt = null;
   var estimates = new Map();
+  // Blobs are immutable. A successful preview decode can serve upload preflight
+  // too; WeakSet entries do not retain old card files after a reset/close.
+  var checkedBlobs = new WeakSet();
   function estimate(quantity) {
     if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) return Promise.reject(new Error("Choose 1–1,000 cards."));
     if (estimates.has(quantity) && estimates.get(quantity).expires <= Date.now()) estimates.delete(quantity);
@@ -214,12 +217,12 @@
             while (!previewError && !done && current === generation && nextPreview < jobs.length) {
               var job = jobs[nextPreview++];
               try {
-                var value = job.item[job.side];
+                var value = job.item[job.side], blob = null;
                 if (job.side === "back" && value == null) {
-                  job.img.src = platformOrigin + "/partner-widget/default-card-back.jpeg";
+                  job.img.src = platformOrigin + "/partner-widget/default-card-back.jpg";
                   job.figure.appendChild(element("small", "muted", "TCGPlaytest default back"));
                 } else {
-                  var blob = typeof value === "function" ? await value() : value;
+                  blob = typeof value === "function" ? await value() : value;
                   if (done || current !== generation) return;
                   if (!(blob instanceof Blob) || ["image/png", "image/jpeg"].indexOf(blob.type) === -1 || !blob.size || blob.size > 20 * 1024 * 1024) throw new Error("Use PNG/JPEG images up to 20 MiB for every front and back.");
                   var url = URL.createObjectURL(blob); urls.push(url); job.img.src = url;
@@ -227,6 +230,7 @@
                 await job.img.decode();
                 if (done || current !== generation) return;
                 if (job.img.naturalWidth * job.img.naturalHeight > 40000000) throw new Error("Images must be no larger than 40 megapixels.");
+                if (blob) checkedBlobs.add(blob);
                 if (job.img.naturalWidth < 744 || job.img.naturalHeight < 1040) {
                   quality.hidden = false;
                   job.figure.appendChild(element("small", "muted", "Low resolution — may print blurry"));
@@ -314,9 +318,12 @@
           if (attempt.blobs.has(blob)) return attempt.blobs.get(blob);
           // Cache the in-flight promise too: concurrent designs share one back upload.
           var pending = (async function () {
-            var image = await createImageBitmap(blob);
-            var tooBig = image.width * image.height > 40000000; image.close();
-            if (tooBig) throw new Error("Images must be no larger than 40 megapixels.");
+            if (!checkedBlobs.has(blob)) {
+              var image = await createImageBitmap(blob);
+              var tooBig = image.width * image.height > 40000000; image.close();
+              if (tooBig) throw new Error("Images must be no larger than 40 megapixels.");
+              checkedBlobs.add(blob);
+            }
             var grant = await widgetRequest("uploads", "POST", { request_id: crypto.randomUUID(), content_type: blob.type, size: blob.size }, attempt.token);
             var url = new URL(grant.upload_url);
             if (url.protocol !== "https:" || url.username || url.password || grant.method !== "PUT") throw new Error("The service returned an invalid upload link.");
@@ -332,25 +339,32 @@
             throw error;
           }
         }
-        var nextItem = 0, uploadError = null;
-        var completed = attempt.uploaded.filter(function (item, index) { return item && item.front_upload_id && (!attempt.items[index].back || item.back_upload_id); }).length;
-        progress("Uploaded " + completed + " of " + attempt.items.length + " designs…");
+        var uploadTasks = new Map(), uploadError = null, nextTask = 0;
+        function uploadedCount() { return attempt.uploaded.filter(function (item, index) { return item && item.front_upload_id && (!attempt.items[index].back || item.back_upload_id); }).length; }
+        attempt.items.forEach(function (item, index) {
+          var partial = attempt.uploaded[index] || (attempt.uploaded[index] = { quantity: item.quantity });
+          ["front", "back"].forEach(function (side) {
+            var field = side + "_upload_id", value = item[side];
+            if (!value || partial[field]) return;
+            if (!uploadTasks.has(value)) uploadTasks.set(value, []);
+            uploadTasks.get(value).push({ partial: partial, field: field });
+          });
+        });
+        var tasks = Array.from(uploadTasks.entries());
+        progress("Uploaded " + uploadedCount() + " of " + attempt.items.length + " designs…");
         async function uploadWorker() {
-          while (!uploadError && nextItem < attempt.items.length) {
-            var i = nextItem++, item = attempt.items[i];
-            var partial = attempt.uploaded[i] || (attempt.uploaded[i] = { quantity: item.quantity });
-            if (partial.front_upload_id && (!item.back || partial.back_upload_id)) continue;
+          while (!uploadError && nextTask < tasks.length) {
+            var task = tasks[nextTask++];
             try {
-              if (!partial.front_upload_id) partial.front_upload_id = await upload(item.front);
-              if (uploadError) return;
-              if (item.back && !partial.back_upload_id) partial.back_upload_id = await upload(item.back);
-              completed++;
-              progress("Uploaded " + completed + " of " + attempt.items.length + " designs…");
+              var id = await upload(task[0]);
+              task[1].forEach(function (target) { target.partial[target.field] = id; });
+              progress("Uploaded " + uploadedCount() + " of " + attempt.items.length + " designs…");
             } catch (error) { uploadError = uploadError || error; }
           }
         }
-        // Each worker has at most one transfer in flight. Drain all three before
-        // allowing a retry/reset so a failed upload cannot race the next attempt.
+        // Schedule unique faces rather than whole designs. One slow shared back
+        // occupies only one slot, and a double-sided card uploads both faces at
+        // once. Drain all three before allowing a retry/reset.
         await Promise.all([uploadWorker(), uploadWorker(), uploadWorker()]);
         if (uploadError) throw uploadError;
         attempt.payload = { items: attempt.uploaded };
