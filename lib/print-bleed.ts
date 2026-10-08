@@ -181,6 +181,7 @@ export async function extrudeMaskedPixels(
 }
 
 function patchCorners(imageData: { data: Uint8Array }, width: number, height: number, size = 40) {
+  size = Math.min(size, Math.floor((width - 1) / 2), Math.floor((height - 1) / 2))
   const pixels = imageData.data
   const indexOf = (x: number, y: number) => (y * width + x) * 4
   const copy = (targetX: number, targetY: number, sourceX: number, sourceY: number) => {
@@ -207,6 +208,14 @@ function patchCorners(imageData: { data: Uint8Array }, width: number, height: nu
 export async function preparePrintArtwork(bytes: Buffer) {
   const metadata = await sharp(bytes, { limitInputPixels: 40_000_000, failOn: "warning" }).metadata()
   const width = metadata.width!, height = metadata.height!
+  // Extremely small but readable files remain orderable. Use nearest-neighbor
+  // enlargement only when bleed would round to zero pixels; it adds no detail.
+  if (Math.round(2 * width / 63) === 0 || Math.round(2 * height / 88) === 0) {
+    const scale = Math.max(63 / width, 88 / height)
+    const scaledWidth = Math.ceil(width * scale), scaledHeight = Math.ceil(height * scale)
+    if (scaledWidth * scaledHeight > 40_000_000) throw new ApiError(422, "image_pixels_exceeded", "Artwork plus 2 mm bleed exceeds 40 MP")
+    return preparePrintArtwork(await sharp(bytes).resize(scaledWidth, scaledHeight, { kernel: "nearest", fit: "fill" }).png().toBuffer())
+  }
   if (detectExistingBleed(width, height)) {
     const sourceBleed = inferExistingBleedMm(width, height)
     if (sourceBleed === 2) return bytes // Preserve supplied 2 mm bleed, including its exact pixels.
@@ -214,7 +223,7 @@ export async function preparePrintArtwork(bytes: Buffer) {
     const top = Math.round((sourceBleed - 2) * height / (88 + sourceBleed * 2))
     return sharp(bytes).extract({ left, top, width: width - left * 2, height: height - top * 2 }).png().toBuffer()
   }
-  const bleedX = Math.round(2 * width / 63), bleedY = Math.round(2 * height / 88)
+  const bleedX = Math.max(1, Math.round(2 * width / 63)), bleedY = Math.max(1, Math.round(2 * height / 88))
   const outWidth = width + bleedX * 2, outHeight = height + bleedY * 2
   if (outWidth * outHeight > 40_000_000) throw new ApiError(422, "image_pixels_exceeded", "Artwork plus 2 mm bleed exceeds 40 MP")
   const { data } = await sharp(bytes).toColourspace("srgb").ensureAlpha().raw().toBuffer({ resolveWithObject: true })
