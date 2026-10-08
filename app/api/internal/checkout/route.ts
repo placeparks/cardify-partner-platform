@@ -20,7 +20,7 @@ export async function POST(request: Request) { return api(async () => {
   }
   // The commerce app receives counts only; production later signs these same files.
   return NextResponse.json({ id: cart.id, card_count: cart.card_count, affiliate_code: cart.affiliate_code, external_ref: cart.external_ref,
-    expires_at: cart.expires_at, partner_id: cart.partner_id,
+    expires_at: cart.expires_at, partner_id: cart.partner_id, warnings: cart.artwork_warnings || [],
     partner_terms_version: cart.partner_terms_version, partner_terms_accepted_at: cart.partner_terms_accepted_at,
     customer_terms_version: CUSTOMER_TERMS_VERSION, customer_acceptance: acceptance,
     items: files.filter((f:any)=>f.side === "front").map((f:any)=>({ id: `${cart.id}_${f.item_index}`, quantity: f.quantity, finish: "standard" })) }, { headers: { "Cache-Control": "no-store" } })
