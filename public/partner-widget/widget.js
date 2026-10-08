@@ -154,7 +154,6 @@
       var title = element("h1", "", "Review your cards"); title.id = "tcgp-review-title";
       intro.appendChild(title); intro.appendChild(element("p", "muted", "Check each front, matching back, and quantity before checkout."));
       var count = element("span", "count", "Preparing previews…"); summary.appendChild(intro); summary.appendChild(count); content.appendChild(summary);
-      content.appendChild(element("p", "notice", "We add 2 mm print bleed during artwork checks. Cards without a supplied back use the TCGPlaytest back. Low-resolution artwork is accepted with a quality warning."));
       var price = element("p", "notice", "Loading print estimate…"); content.appendChild(price);
       var quality = element("p", "notice", "Some images are below the recommended 744 × 1040 pixels and may print blurry or pixelated. You can still order them. Continuing means you accept their print quality.");
       quality.hidden = true; content.appendChild(quality);
