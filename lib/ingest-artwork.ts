@@ -12,10 +12,12 @@ export async function preflight(bytes: Buffer) {
   catch { throw new ApiError(422,"image_invalid","Invalid image") }
   if (!["png","jpeg"].includes(metadata.format||"") || !metadata.width || !metadata.height || (metadata.pages||1)!==1) throw new ApiError(422,"image_invalid","Single-frame PNG/JPEG required")
   if (metadata.width*metadata.height>40_000_000) throw new ApiError(422,"image_pixels_exceeded","Image exceeds 40 MP")
-  if (metadata.width<Number(process.env.PARTNER_MIN_IMAGE_WIDTH||744) || metadata.height<Number(process.env.PARTNER_MIN_IMAGE_HEIGHT||1040)) throw new ApiError(422,"image_dimensions_invalid","Image dimensions below minimum")
   try { await sharp(bytes,{limitInputPixels:40_000_000,failOn:"warning"}).stats() }
   catch { throw new ApiError(422,"image_invalid","Image could not be fully decoded") }
-  return {sha256:digest(bytes),contentType:metadata.format==="png"?"image/png":"image/jpeg"}
+  const recommendedWidth=Number(process.env.PARTNER_MIN_IMAGE_WIDTH)||744, recommendedHeight=Number(process.env.PARTNER_MIN_IMAGE_HEIGHT)||1040
+  const warning=metadata.width<recommendedWidth || metadata.height<recommendedHeight
+    ? {code:"image_low_resolution",width:metadata.width,height:metadata.height,recommended_width:recommendedWidth,recommended_height:recommendedHeight,message:"Low-resolution artwork may print blurry or pixelated. You can still order it."} : null
+  return {sha256:digest(bytes),contentType:metadata.format==="png"?"image/png":"image/jpeg",warning}
 }
 
 async function storeCheckedFile(path: string, bytes: Buffer, file: {sha256:string;contentType:string}) {
@@ -51,6 +53,7 @@ export async function validateQueuedArtwork(deadline=Date.now()+40000) {
           }
           const file=await preflight(bytes)
           if (!checked(await db.rpc("partner_reserve_validation",{p_job:job.id,p_lease:job.lease_token,p_hash:file.sha256,p_type:file.contentType}))) continue
+          if (!checked(await db.rpc("partner_record_artwork_quality",{p_job:job.id,p_lease:job.lease_token,p_warning:file.warning}))) continue
           const blocked=checked(await db.from("partner_content_blocks").select("sha256").eq("sha256",file.sha256))||[]
           if (blocked.length) throw new ApiError(422,"content_blocked","Artwork blocked")
           const path=`carts/${job.cart_id}/${file.sha256}`
