@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { createCartExample, documentationConfig, documentationExamples, validationErrors } from "@/lib/api-documentation"
 import { CUSTOMER_RIGHTS_STATEMENT } from "@/lib/manufacturing-contract"
+import { integrationExamples } from "@/lib/integration-examples"
 
 export const dynamic = "force-dynamic"
 
@@ -67,6 +68,28 @@ if (!statusResponse.ok) throw new Error(status.error.message);
       <p>No Stripe Connect account is required. A test key runs artwork validation and opens a non-paying preview; it cannot charge, print or ship. A live key enables payment checkout when that deployment is configured for it.</p>
     </section>
 
+    <section id="branding" className="scroll-mt-24 space-y-4 rounded border border-cyan-300/20 p-4 sm:p-6">
+      <h2 className="text-2xl font-bold">Customize your hosted checkout</h2>
+      <p>Open <Link href="/dashboard" className="underline">Dashboard → 4. Checkout branding</Link>, enable branding and save. Choose a store name, PNG/JPEG logo (up to 200 KiB), accent color, light/dark theme, system/rounded/serif font, classic/panel layout, heading preset and an optional plain-text welcome message.</p>
+      <p>Branding belongs to your account and applies automatically when an API or widget customer opens hosted checkout. Existing open checkout pages need a reload to see changes. Disable branding and save to restore the standard checkout. Logos are decoded, resized to fit 512 × 128 and stored with your settings; remote images, SVG, HTML, CSS and JavaScript are not accepted.</p>
+      <p>Prices, shipping/tax calculations, required customer fields, image-quality warnings and acknowledgment, rights confirmation, payment flow, purchase terms and the TCGPlaytest / Cardify LLC seller disclosure cannot be edited or hidden. Button text contrast is selected automatically. These settings do not change the widget review modal, Stripe/PayPal payment screens, receipts or packaging.</p>
+      <p><strong>No cart API changes are needed.</strong> Do not send branding, a logo, CSS or a checkout URL in <code>POST /v1/carts</code>. Follow the returned <code>checkout_url</code>; the platform loads your saved settings. Test checkout remains a non-paying validation screen; use the dashboard style preview to inspect branding without placing a live order.</p>
+    </section>
+    <section id="success-page" className="scroll-mt-24 space-y-4">
+      <h2 className="text-2xl font-bold">Your own success page and registered domain</h2>
+      <p>Host a success page on your website and send its address as <code>return_url</code>. It must be HTTPS on the exact origin of your partner account’s <code>website_url</code> (scheme, hostname and port). Paths can differ; a different subdomain is a different origin. The registered website is shown in Dashboard → 3. Add TCGPlaytest to your website. Contact the platform operator if that account address needs changing.</p>
+      <p><code>STORE_ORIGIN</code> is an environment variable used by these examples to construct the return URL; it is not an API setting. Use your deployed HTTPS website origin without a trailing slash. Changing <code>website_url</code> in the partner database does not update your application environment: update <code>STORE_ORIGIN</code> and redeploy when changing domains. No platform-wide environment change or API-key rotation is required for a partner domain change.</p>
+      <p><code>widget_allowed_origins</code> controls widget access only and does not authorize additional return domains. HTTP localhost is not a valid return destination; use a registered public HTTPS deployment or tunnel for a complete return-flow test.</p>
+      <p>The hosted payment confirmation appears first, then returns to your saved destination when the paid order is verified. Keep the cart ID tied to your customer session. Your success page must read the saved cart’s <code>order_id</code> and verify <code>GET /v1/orders/&#123;id&#125;</code>, or use a verified payment webhook. Never mark an order paid because a browser visited this URL. The checkout’s “Return to partner website” link goes to the registered website, not to a payment-success claim.</p>
+    </section>
+    <section id="language-examples" className="scroll-mt-24 space-y-4">
+      <h2 className="text-2xl font-bold">Integration examples: cURL, Python, PHP and Node.js</h2>
+      <p>These terminal/server examples use public artwork URLs or an <code>image_url</code> from a completed direct upload. Set <code>API_BASE</code> to <code>{config.baseUrl}</code>, <code>TCGP_API_KEY</code> to your server secret, <code>STORE_ORIGIN</code> to your registered website, <code>FRONT_IMAGE_URL</code> to the artwork reference, and <code>IDEMPOTENCY_KEY</code> to a persisted order revision. Keep the same payload and key after ambiguous failures; choose a new revision only when changing the order.</p>
+      <p>Use a test key first. Add your own customer authentication/session checks, CSRF protection and database association before using these as public endpoints. Only the owner of a cart may poll or receive its checkout URL. Show returned quality warnings. Poll every 3–5 seconds; honor a longer Retry-After response and the 60-second write/order rate limit. Stop on terminal states. The blocking loops below suit scripts/workers; in a web app return the cart immediately and poll through your server.</p>
+      {([['cURL / Bash: create, poll, checkout', integrationExamples.curl], ['cURL / Bash: upload a local PNG', integrationExamples.uploadCurl], ['Python 3 + requests', integrationExamples.python], ['PHP 8 + cURL', integrationExamples.php]] as const).map(([label, code]) => <details key={label} className="rounded border border-white/20 p-4"><summary className="cursor-pointer font-bold">{label}</summary><div className="mt-3"><Code label={label}>{code}</Code></div></details>)}
+      <details className="rounded border border-white/20 p-4"><summary className="cursor-pointer font-bold">Node.js / JavaScript (server-side)</summary><div className="mt-3"><Code label="Node.js create and status example">{sample}</Code></div></details>
+      <p>Omit backs to use the default; add <code>back_image_url</code> to an item for its reverse face or at the top level for a shared back. Storage PUTs use the returned headers with no partner Authorization header. There is no finalize endpoint. Examples are integration starting points, not complete storefront applications.</p>
+    </section>
     <h2 className="text-2xl font-bold">Create → poll → redirect</h2>
     <ol className="list-decimal space-y-3 pl-6">
       <li><code>POST /v1/carts</code> returns <strong>202 Accepted</strong>, <code>status: validating</code>, and no checkout URL.</li>
