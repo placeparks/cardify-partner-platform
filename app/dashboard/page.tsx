@@ -4,6 +4,7 @@ import Link from "next/link"
 import { signInWithGoogle } from "@/lib/supabase-browser"
 import { TERMS_VERSION, PARTNER_TERMS_STATEMENT, hasPartnerTerms } from "@/lib/manufacturing-contract"
 import { AffiliatePreference } from "@/components/affiliate-preference"
+import { CheckoutBrandingSettings } from "@/components/checkout-branding-settings"
 export default function DashboardPage() {
   const [state,setState] = useState<any>(null), [error,setError] = useState(""), [busy,setBusy] = useState(false)
   const [accepted,setAccepted] = useState(false), [credential,setCredential] = useState("")
@@ -74,6 +75,7 @@ export default function DashboardPage() {
           <button className="button-primary" onClick={async()=>{try{await navigator.clipboard.writeText(partner.widgetCode);setWidgetCopied(true)}catch{setError("Copy failed; select the widget code manually.")}}}>{widgetCopied ? "Widget code copied" : "Copy widget code"}</button></>}
         <Link className="flex min-h-11 w-fit items-center text-cyan-300 underline" href="/docs#widget">Widget setup guide</Link>
       </section>
+      <CheckoutBrandingSettings initial={partner.checkout_branding} />
     </>}
   </div>
 }
