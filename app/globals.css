@@ -125,6 +125,21 @@ pre { max-width: 100%; }
   background: rgba(0, 209, 255, 0.05);
 }
 
+/* Native option popups need their own opaque colors, not the field's
+   translucent background, to stay readable before hover on Windows. */
+select.input-recessed,
+select.input-recessed:focus {
+  color-scheme: dark;
+  color: #f8fafc;
+  background-color: #0b1020;
+}
+
+select.input-recessed option,
+select.input-recessed optgroup {
+  color: #f8fafc;
+  background-color: #0b1020;
+}
+
 .portal-energy-segment {
   width: 10px;
   height: 4px;
