@@ -4,6 +4,7 @@ import { api, authenticate, checked, digest, json, publicCart, secret } from "@/
 import { ApiError, DEFAULT_CARD_BACK_PATH, partnerReturnUrl, validateCart } from "@/lib/manufacturing-contract"
 import { assertUploadOwner } from "@/lib/partner-uploads"
 import { scheduleCartValidation } from "@/lib/validation-dispatch"
+import { prepaidKey, prepaidName } from '@/lib/prepaid-contract'
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -13,6 +14,11 @@ export async function POST(request: Request) { return api(async () => {
   const idempotency = request.headers.get("idempotency-key")
   if (!idempotency || !/^[\x21-\x7e]{1,200}$/.test(idempotency)) throw new ApiError(400, "invalid_request", "Idempotency-Key is required (1–200 printable characters)")
   const body = validateCart(await json(request), Number(process.env.PARTNER_MAX_CARDS || 1000), new URL(DEFAULT_CARD_BACK_PATH, request.url).href)
+  if (body.settlement === 'prepaid') {
+    prepaidKey(key)
+    const account=checked(await db.from(prepaidName('partner_credit_accounts')).select('terms_version').eq('partner_id',key.partner_id).maybeSingle())
+    if (!account) throw new ApiError(403,'prepaid_terms_required','Enable prepaid fulfillment in your dashboard first.')
+  }
   const returnUrl = partnerReturnUrl(body.return_url, key.partner.website_url)
   const requestHash = digest(JSON.stringify(body))
   const existing = checked(await db.from("partner_carts").select("*").eq("partner_id", key.partner_id).eq("mode", key.mode).eq("idempotency_key", idempotency).maybeSingle())
@@ -35,7 +41,8 @@ export async function POST(request: Request) { return api(async () => {
   const retentionDays = Number(process.env.PARTNER_ARTWORK_RETENTION_DAYS || 30)
   if (!Number.isInteger(expiryHours) || expiryHours < 1 || expiryHours > 168 || !Number.isInteger(retentionDays) || retentionDays < 0 || retentionDays > 365) throw new ApiError(503, "configuration_error", "Artwork retention configuration is invalid")
   const cart = { id, partner_id: key.partner_id, api_key_id: key.id, mode: key.mode, status: "validating", external_ref: body.external_ref,
-    card_count: body.card_count, card_stock: body.card_stock, affiliate_code: key.partner.checkout_affiliate_code || null, return_url: returnUrl,
+    settlement: body.settlement || 'hosted',
+    card_count: body.card_count, card_stock: body.card_stock, affiliate_code: body.settlement === 'prepaid' ? null : key.partner.checkout_affiliate_code || null, return_url: returnUrl,
     partner_terms_version: key.partner.terms_version, partner_terms_accepted_at: key.partner.terms_accepted_at,
     certification: null, certification_text: {}, submitted_by: key.partner.user_id,
     flow_version: 2, validation_done: 0, validation_total: 0, validation_errors: [], retention_days: retentionDays,
