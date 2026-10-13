@@ -162,7 +162,7 @@
       previous.type = next.type = "button"; pager.appendChild(previous); pager.appendChild(pageLabel); pager.appendChild(next); pager.hidden = true;
       content.appendChild(grid); content.appendChild(pager); shell.appendChild(content);
       var footer = element("footer", "footer"), footerCopy = element("div", "footer-copy");
-      footerCopy.appendChild(element("p", "muted", "Next: enter your details on TCGPlaytest. No payment is taken here."));
+      footerCopy.appendChild(element("p", "muted", "Next: enter your delivery details here, then continue to Stripe for payment."));
       var status = element("p", "status", "Preparing your card previews…"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
       footerCopy.appendChild(status); footer.appendChild(footerCopy);
       var actions = element("div", "actions"), fresh = element("button", "secondary", "Use current designs"), proceed = element("button", "primary", "Proceed to checkout");
@@ -428,9 +428,66 @@
         throw new Error((result.errors || []).map(function (item) { return "Item " + (item.item_index + 1) + " " + (item.side || "") + ": " + item.message; }).join(" ") || "Checkout is " + result.status + ". Start a new order if appropriate.");
       }
       progress("Artwork checked. Opening checkout…");
-      window.location.assign(checkoutUrl(result.checkout_url));
+      openEmbeddedCheckout(result, config);
     } catch (error) { progress(error.message); throw error; }
     finally { if (dialog) dialog.finish(); }
+  }
+
+  var checkoutPanel = null;
+  function openEmbeddedCheckout(cart, config) {
+    if (!cart || (cart.status && cart.status !== 'open')) throw new Error('Wait until the cart is open before checkout.');
+    var target = new URL(checkoutUrl(cart.checkout_url));
+    if (config.checkoutDisplay === 'redirect' || settings.checkoutDisplay === 'redirect') {
+      window.location.assign(target.href); return;
+    }
+    if (checkoutPanel) checkoutPanel();
+    var host = document.createElement('div'), root = host.attachShadow({ mode: 'open' });
+    host.setAttribute('data-tcgplaytest-checkout', 'true');
+    var style = document.createElement('style');
+    style.textContent = ':host{all:initial}*{box-sizing:border-box}dialog{width:min(1180px,calc(100vw - 24px));height:calc(100dvh - 24px);max-width:none;max-height:none;margin:auto;padding:0;border:1px solid #334155;border-radius:18px;background:#020617;color:#f8fafc;font:14px/1.5 system-ui;overflow:hidden}dialog::backdrop{background:#020617b8;backdrop-filter:blur(4px)}.shell{height:100%;display:flex;flex-direction:column}.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 20px;border-bottom:1px solid #334155}.bar strong{font-size:15px}.status{margin:0;padding:10px 20px;color:#cbd5e1}.status:empty{display:none}button{font:inherit;border:1px solid #475569;color:#f8fafc;background:#172033;padding:8px 14px;border-radius:8px;cursor:pointer;min-height:40px}button:focus-visible{outline:3px solid #f5af38;outline-offset:2px}iframe{display:block;width:100%;flex:1;min-height:0;border:0;background:#020617}.preview{padding:32px;line-height:1.8}@media(max-width:600px){dialog{width:100vw;height:100dvh;border-radius:0;border:0}}';
+    root.appendChild(style);
+    var dialog = document.createElement('dialog'), shell = document.createElement('div'), bar = document.createElement('div');
+    shell.className = 'shell'; bar.className = 'bar';
+    dialog.setAttribute('aria-label', 'Your card checkout');
+    var title = document.createElement('strong'); title.textContent = 'Your card checkout';
+    var close = document.createElement('button'); close.type = 'button'; close.textContent = 'Back to designs';
+    bar.appendChild(title); bar.appendChild(close); shell.appendChild(bar);
+    var status = document.createElement('p'); status.className = 'status'; status.setAttribute('role', 'status'); shell.appendChild(status);
+    var previousFocus = document.activeElement, timer = null, closed = false, frame = null;
+    function finish() {
+      if (closed) return; closed = true; clearTimeout(timer);
+      window.removeEventListener('message', receive); dialog.close(); host.remove(); checkoutPanel = null;
+      if (previousFocus && previousFocus.isConnected) previousFocus.focus();
+    }
+    function receive(event) {
+      if (!frame || event.source !== frame.contentWindow || event.origin !== target.origin) return;
+      if (event.data && event.data.type === 'tcgp-checkout-ready') { clearTimeout(timer); status.textContent = ''; }
+      if (!event.data || event.data.type !== 'tcgp-checkout-payment') return;
+      try {
+        var payment = new URL(event.data.url);
+        var verifiedReturn = payment.origin === target.origin && payment.pathname === '/partner-checkout/return';
+        if (payment.protocol !== 'https:' || payment.username || payment.password || !(payment.hostname === 'checkout.stripe.com' || verifiedReturn)) throw new Error('Invalid payment destination');
+        window.location.assign(payment.href);
+      } catch (_) { status.textContent = 'The payment link could not be opened. Close this checkout and resume your order.'; }
+    }
+    close.onclick = finish;
+    dialog.addEventListener('cancel', function (event) { event.preventDefault(); finish(); });
+    if (cart.mode === 'test') {
+      var preview = document.createElement('p'); preview.className = 'preview';
+      preview.textContent = 'Artwork checks passed. This is a non-paying test preview; no printing or shipping will occur.';
+      shell.appendChild(preview);
+    } else {
+      target.pathname = '/embed' + target.pathname;
+      target.searchParams.set('parent_origin', window.location.origin);
+      frame = document.createElement('iframe'); frame.title = 'Card order delivery and checkout'; frame.referrerPolicy = 'no-referrer';
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox');
+      frame.src = target.href; shell.appendChild(frame);
+      status.textContent = 'Loading your secure checkout…';
+      timer = setTimeout(function () { status.textContent = 'Checkout has not loaded. Close and resume to retry. Your store may need to enable checkout for this website.'; }, 25000);
+      window.addEventListener('message', receive);
+    }
+    dialog.appendChild(shell); root.appendChild(dialog); document.body.appendChild(host);
+    checkoutPanel = finish; dialog.showModal(); close.focus();
   }
 
   function checkoutUrl(value) {
@@ -502,9 +559,9 @@
     if (!result || result.status && result.status !== "open" || typeof result.checkout_url !== "string") {
       throw new Error("Your server must return an open cart with its checkout_url after validation.");
     }
-    // A redirect uses the normal checkout, including the customer's affiliate-code field.
+    // Open the same validated checkout inside the partner page.
     // Payment/production success must be confirmed with signed order webhooks.
-    window.location.assign(checkoutUrl(result.checkout_url));
+    openEmbeddedCheckout(result, config);
   }
 
   function open(options) {
@@ -549,7 +606,7 @@
     });
     container.appendChild(error); container.appendChild(button); document.body.appendChild(container);
   }
-  window.TCGPlaytest = { open: open, reset: reset, estimate: estimate, configure: function (options) { standaloneConfig = Object.assign({}, standaloneConfig, options); }, standalone: Boolean(settings.partnerKey), review: true };
+  window.TCGPlaytest = { checkout: function (cart) { openEmbeddedCheckout(cart, {}); }, open: open, reset: reset, estimate: estimate, configure: function (options) { standaloneConfig = Object.assign({}, standaloneConfig, options); }, standalone: Boolean(settings.partnerKey), review: true };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
   else install();
 })();
