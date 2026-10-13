@@ -1,11 +1,14 @@
 "use client"
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { signInWithGoogle } from "@/lib/supabase-browser"
 import { TERMS_VERSION, PARTNER_TERMS_STATEMENT, hasPartnerTerms } from "@/lib/manufacturing-contract"
 import { AffiliatePreference } from "@/components/affiliate-preference"
 import { CheckoutBrandingSettings } from "@/components/checkout-branding-settings"
+import { PrepaidCredit } from '@/components/prepaid-credit'
 export default function DashboardPage() {
+  const router = useRouter()
   const [state,setState] = useState<any>(null), [error,setError] = useState(""), [busy,setBusy] = useState(false)
   const [accepted,setAccepted] = useState(false), [credential,setCredential] = useState("")
   const [webhook,setWebhook] = useState(""), [mode,setMode] = useState("test")
@@ -20,6 +23,10 @@ export default function DashboardPage() {
     setWidgetOrigins((data.partner?.widget_allowed_origins || []).join("\n"))
   }
   useEffect(()=>{load().catch(e=>setError(e.message))},[])
+  useEffect(() => {
+    // Preserve saved Stripe session URLs while bringing returning buyers to their wallet.
+    if (new URLSearchParams(window.location.search).get('credit') === 'return') router.replace('/dashboard/credits?credit=return')
+  }, [router])
   const welcomePartnerId = state?.partner?.status === "approved" && !state.partner.api_blocked_at &&
     !state.partner.access_revoked_at && !state.partner.welcome_email_sent_at ? state.partner.id : null
   useEffect(() => {
@@ -46,6 +53,7 @@ export default function DashboardPage() {
     {error&&<p className="border border-red-400 p-4 text-red-200" role="alert">{error}</p>}
     {partner.status!=="approved"?<p className="glass-panel p-4 sm:p-6">{partner.status === "declined" ? "Your application was declined. Contact TCGPlaytest for help with your application." : "Automatic activation is unavailable. Contact TCGPlaytest to complete your account setup."}</p>:partner.api_blocked_at?<p className="glass-panel p-4 sm:p-6">Widget and API access are revoked. Contact TCGPlaytest about your account review.</p>:<>
       <p className="text-slate-300">Set up your API integration and checkout widget below.</p>
+      <section className="flex flex-wrap items-center justify-between gap-5 rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-5 sm:p-6"><div><h2 className="text-xl font-semibold">Printing credit</h2><p className="mt-2 text-sm text-slate-300">Top up your balance to fund your customers’ card printing.</p></div><Link className="button-primary" href="/dashboard/credits">Buy credits →</Link></section>
       <div className="grid gap-4 sm:grid-cols-2">{[["API + widget carts",state.apiMetrics?.carts||0],["Manufacturing orders",state.apiMetrics?.orders||0]].map(([label,value])=><div className="glass-panel p-5" key={label}><p className="text-sm text-slate-300">{label}</p><p className="mt-2 break-all text-2xl font-bold text-[#00ff9d]">{value}</p></div>)}</div>
       <section className="glass-panel space-y-5 p-4 sm:p-6">
         <h2 className="text-2xl font-bold">Partner terms</h2>
@@ -76,6 +84,7 @@ export default function DashboardPage() {
         <Link className="flex min-h-11 w-fit items-center text-cyan-300 underline" href="/docs#widget">Widget setup guide</Link>
       </section>
       <CheckoutBrandingSettings initial={partner.checkout_branding} />
+      <PrepaidCredit />
     </>}
   </div>
 }
