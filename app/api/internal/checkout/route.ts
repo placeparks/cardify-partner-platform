@@ -6,8 +6,9 @@ import { checkoutBranding } from "@/lib/checkout-branding"
 import { partnerReturnUrl } from "@/lib/manufacturing-contract"
 export async function POST(request: Request) { return api(async () => {
   internalAuth(request); const body = await json(request)
-  const cart = checked(await db.from("partner_carts").select("*,partner:partnership_requests(status,api_blocked_at,checkout_branding,website_url)").eq("checkout_token_hash", digest(String(body.token || ""))).maybeSingle())
+  const cart = checked(await db.from("partner_carts").select("*,partner:partnership_requests(status,api_blocked_at,checkout_branding,website_url,widget_allowed_origins)").eq("checkout_token_hash", digest(String(body.token || ""))).maybeSingle())
   if (!cart || cart.mode !== "live") throw new ApiError(404,"not_found","Live cart not found")
+  if (cart.settlement === 'prepaid') throw new ApiError(409,'prepaid_cart','This cart is funded through the partner prepaid API, not customer checkout.')
   if (cart.status !== "open" || Date.parse(cart.expires_at) <= Date.now() || cart.partner.api_blocked_at || cart.partner.status !== "approved") throw new ApiError(409,"cart_unavailable","Cart is no longer available")
   const files = checked(await db.from("partner_artwork").select("item_index,side,quantity,state,expected_sha256,actual_sha256,storage_path,print_sha256").eq("cart_id",cart.id).order("item_index")) || []
   const hashes = files.flatMap((f:any)=>[f.actual_sha256,f.expected_sha256,f.print_sha256]).filter(Boolean)
@@ -26,6 +27,7 @@ export async function POST(request: Request) { return api(async () => {
   return NextResponse.json({ id: cart.id, card_count: cart.card_count, affiliate_code: cart.affiliate_code, external_ref: cart.external_ref,
     expires_at: cart.expires_at, partner_id: cart.partner_id, warnings: cart.artwork_warnings || [],
     branding: checkoutBranding(cart.partner.checkout_branding), partner_website: partnerWebsite,
+    checkout_frame_origins: [partnerWebsite, ...(cart.partner.widget_allowed_origins || [])].filter(Boolean),
     partner_terms_version: cart.partner_terms_version, partner_terms_accepted_at: cart.partner_terms_accepted_at,
     customer_terms_version: CUSTOMER_TERMS_VERSION, customer_acceptance: acceptance,
     items: files.filter((f:any)=>f.side === "front").map((f:any)=>({ id: `${cart.id}_${f.item_index}`, quantity: f.quantity, finish: "standard" })) }, { headers: { "Cache-Control": "no-store" } })
