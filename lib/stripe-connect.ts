@@ -10,7 +10,8 @@ function stripeAuthHeader() {
 
 export function cardifyAppOrigin(requestOrigin?: string | null) {
   return (
-    process.env.NEXT_PUBLIC_CARDIFY_APP_URL
+    process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL
+    || process.env.NEXT_PUBLIC_CARDIFY_APP_URL
     || process.env.CARDIFY_APP_URL
     || requestOrigin
     || "http://localhost:3000"

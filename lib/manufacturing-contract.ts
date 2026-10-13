@@ -41,11 +41,12 @@ export const DEFAULT_CARD_BACK_PATH = "/partner-widget/default-card-back.jpg"
 export function validateCart(body: any, maxCards = 1000, defaultBackUrl?: string) {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new ApiError(400, "invalid_request", "Expected a JSON object")
   if (Object.hasOwn(body, "certification")) throw new ApiError(400, "invalid_request", "Remove certification. Accept partner terms once in the dashboard; the customer confirms image rights at checkout.")
-  const allowed = ["items", "back_image_url", "back_sha256", "card_stock", "external_ref", "return_url"]
+  const allowed = ["items", "back_image_url", "back_sha256", "card_stock", "external_ref", "return_url", "settlement"]
   if (Object.keys(body).some(key => !allowed.includes(key))) throw new ApiError(400, "invalid_request", "Unknown field; prices and artwork-library IDs are not accepted")
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > maxCards) throw new ApiError(400, "invalid_request", `Submit 1–${maxCards} items`)
   // Thick stock remains unavailable until production confirms its specifications and rate.
   if (body.card_stock && body.card_stock !== "standard") throw new ApiError(400, "invalid_request", "Only standard card stock is currently supported")
+  if (body.settlement !== undefined && !['hosted','prepaid'].includes(body.settlement)) throw new ApiError(400, 'invalid_request', 'settlement must be hosted or prepaid')
   let count = 0
   const items = body.items.map((item: any, index: number) => {
     try {
@@ -62,6 +63,7 @@ export function validateCart(body: any, maxCards = 1000, defaultBackUrl?: string
   })
   if (body.external_ref !== undefined && (typeof body.external_ref !== "string" || body.external_ref.length > 200)) throw new ApiError(400, "invalid_request", "external_ref must be at most 200 characters")
   return { items, card_count: count, card_stock: "standard", external_ref: body.external_ref || null,
+    ...(body.settlement !== undefined ? {settlement:body.settlement} : {}),
     return_url: body.return_url ? httpsUrl(body.return_url, "return_url") : null,
   }
 }

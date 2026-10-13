@@ -245,6 +245,7 @@ export async function preparePrintArtwork(bytes: Buffer, decoded?: DecodedPrintA
     data.copy(edge, 0, sourceRow + sourceRowBytes - 4, sourceRow + sourceRowBytes - 1)
     output.fill(edge, targetRow + edgeBytes + sourceRowBytes, targetRow + rowBytes)
   }
+  
   const top = Buffer.from(output.subarray(bleedY * rowBytes, (bleedY + 1) * rowBytes))
   const bottomStart = (bleedY + height - 1) * rowBytes
   const bottom = Buffer.from(output.subarray(bottomStart, bottomStart + rowBytes))
