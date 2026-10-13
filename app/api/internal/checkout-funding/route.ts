@@ -1,36 +1,42 @@
-# Python 3; pip install requests
-import os, time, requests
-base = os.environ["API_BASE"].rstrip("/")
-headers = {"Authorization": "Bearer " + os.environ["TCGP_API_KEY"]}
-revision = os.environ["IDEMPOTENCY_KEY"]  # Load a persisted order revision, not a new value on retry.
-def api(method, path, **kwargs):
-    while True:
-        response = requests.request(method, base + path, headers=headers,
-                                    timeout=30, allow_redirects=False, **kwargs)
-        if response.status_code == 429:
-            delay = response.headers.get("Retry-After", "60")
-            time.sleep(max(1, int(delay)) if delay.isdigit() else 60)
-            continue
-        if not 200 <= response.status_code < 300:
-            raise RuntimeError("API error: " + response.text)
-        return response.json()
-payload = {
-    "external_ref": revision,
-    "return_url": os.environ["STORE_ORIGIN"].rstrip("/") + "/success",
-    "items": [{"image_url": os.environ["FRONT_IMAGE_URL"], "quantity": 3}]
-}
-headers["Idempotency-Key"] = revision
-cart = api("POST", "/v1/carts", json=payload)
-del headers["Idempotency-Key"]
-# Save cart["id"] against the authenticated customer's order in YOUR database.
-while cart["status"] == "validating":
-    time.sleep(4)
-    cart = api("GET", "/v1/carts/" + cart["id"])
-if cart["status"] == "open":
-    checkout_url = cart["checkout_url"]  # Return the owned cart to your UI; call TCGPlaytest.checkout(cart).
-elif cart["status"] == "converted" and cart.get("order_id"):
-    order = api("GET", "/v1/orders/" + cart["order_id"])
-else:
-    raise RuntimeError(str({"status": cart["status"], "errors": cart.get("errors")}))
-# After the customer returns, reload their saved cart and retrieve its order_id.
-# Only the order API or a verified webhook confirms payment.
+import { api, checked, digest, internalAuth, json } from '@/lib/partner-api'
+import { supabaseAdmin as db } from '@/lib/supabase-admin'
+import { ApiError } from '@/lib/manufacturing-contract'
+import { acceptance, creditError, prepaidMode, PREPAID_TERMS_VERSION, shippingAddress } from '@/lib/prepaid-contract'
+import { commerce, creditRpc } from '@/lib/prepaid'
+import { customerCheckoutOrigin, ensureCustomerCheckout } from '@/lib/prepaid-customer-payment'
+
+export const maxDuration = 60
+export async function POST(request: Request) { return api(async () => {
+  internalAuth(request)
+  const body = await json(request)
+  const mode = prepaidMode()
+  if (body.mode !== mode) throw new ApiError(503, 'checkout_configuration', 'Partner and checkout Stripe credentials must use the same environment.')
+  const shipping = shippingAddress(body.shipping)
+  const accepted = acceptance(body.acceptance)
+  if (accepted.email !== shipping.email) throw new ApiError(400, 'invalid_request', 'The shipping and acceptance emails must match.')
+  const cart = checked(await db.from('partner_carts').select('*').eq('checkout_token_hash', digest(String(body.token || ''))).maybeSingle())
+  if (!cart || cart.mode !== 'live' || cart.settlement !== 'hosted') throw new ApiError(404, 'not_found', 'Hosted cart not found.')
+  // Acceptance time is recorded separately. Retrying a customer's click must not
+  // change the immutable shipping/price instructions or create a second payment.
+  const hash = digest(JSON.stringify({ cart_id: cart.id, shipping, affiliate: body.affiliate_code || '', terms: accepted.terms_version, quality: accepted.image_quality_accepted }))
+  let price = null
+  if (!cart.checkout_funding && process.env.PARTNER_PREPAID_ENABLED === 'true' && cart.api_key_id && Date.parse(cart.expires_at) > Date.now() + 65 * 60_000) {
+    const account = checked(await db.from('partner_credit_accounts').select('terms_version').eq('partner_id', cart.partner_id).maybeSingle())
+    if (account?.terms_version === PREPAID_TERMS_VERSION) {
+      const balance = await creditRpc('partner_credit_balance', { p_partner: cart.partner_id })
+      if (Number.isSafeInteger(body.printing_cents) && body.printing_cents > 0 && balance && !balance.spending_blocked && balance.available_cents >= body.printing_cents) {
+        customerCheckoutOrigin()
+        price = await commerce('quote', { mode, card_count: cart.card_count, shipping, idempotency_key: digest(`automatic:${mode}:${cart.id}:${hash}`) })
+        if (price.mode !== mode || price.printing_cents !== body.printing_cents || ![price.printing_cents, price.shipping_cents, price.tax_cents, price.total_cents].every(n => Number.isSafeInteger(n) && n >= 0) || price.total_cents !== price.printing_cents + price.shipping_cents + price.tax_cents || !Number.isFinite(Date.parse(price.expires_at))) throw new Error('Invalid automatic checkout quote')
+      }
+    }
+  }
+  const selected = await db.rpc('partner_checkout_funding', { p_cart: cart.id, p_mode: mode, p_hash: hash, p_shipping: shipping, p_acceptance: accepted, p_price: price })
+  if (selected.error) creditError(selected.error)
+  if (selected.data.funding === 'hosted') return Response.json({ funding: 'hosted' }, { headers: { 'Cache-Control': 'no-store' } })
+  // A timeout or Stripe failure after this point MUST NOT fall back to a full
+  // customer charge. The saved quote and Stripe idempotency key resume safely.
+  const quote = await ensureCustomerCheckout(selected.data.quote)
+  if (quote.customer_payment_status !== 'open' || !quote.stripe_checkout_url || Date.parse(quote.checkout_expires_at) <= Date.now()) throw new ApiError(409, 'checkout_unavailable', 'This checkout has completed or expired. Return to your store for the order status or a new cart.')
+  return Response.json({ funding: 'prepaid', checkout_url: quote.stripe_checkout_url }, { headers: { 'Cache-Control': 'no-store' } })
+}) }
