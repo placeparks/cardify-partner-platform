@@ -51,7 +51,7 @@ export default function CreditsPage() {
             <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300"><ShieldCheck className="h-5 w-5" aria-hidden="true"/> Secure payment with Stripe</div>
             <div><h2 className="font-semibold">What your credit covers</h2><p className="mt-2 text-sm leading-6 text-slate-300">Credit pays for card printing. Customers pay shipping and quoted fulfillment tax separately through Stripe.</p></div>
             <div><h2 className="font-semibold">Dollar for dollar</h2><p className="mt-2 text-sm leading-6 text-slate-300">A $100 payment adds $100 in USD printing credit. Buy between $10 and $5,000 at a time.</p></div>
-            <div><h2 className="font-semibold">Used automatically at checkout</h2><p className="mt-2 text-sm leading-6 text-slate-300">Your API checkout uses credit when the available balance covers printing. Otherwise, the customer pays the full order normally. Printing starts after payment is confirmed.</p></div>
+            <div><h2 className="font-semibold">Used automatically at checkout</h2><p className="mt-2 text-sm leading-6 text-slate-300">Your API and widget checkout use credit when the available balance covers printing. Otherwise, the customer pays the full order normally. Printing starts after payment is confirmed.</p></div>
             <Link className="inline-flex min-h-11 items-center text-sm text-cyan-300 underline" href="/docs#prepaid">Read the integration guide</Link>
           </aside>
         </div>
