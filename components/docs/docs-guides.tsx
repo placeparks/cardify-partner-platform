@@ -40,7 +40,7 @@ export function DocsOverview({ baseUrl }: { baseUrl: string }) {
     <div className={styles.callout}><ShieldCheck size={19} /><p><strong>Your key stays on your server.</strong> The API uses bearer authentication. The standalone widget uses a public partner identifier and does not need your secret key.</p></div>
     <h2 id="api-base">One API. Your own storefront.</h2>
     <div className={styles.endpoint}><span>BASE URL</span><code>{baseUrl}</code></div>
-    <p>This is the API origin for this deployment. Use its issued keys. Checkout may run on a different origin; pass the returned open cart to <code>TCGPlaytest.checkout(cart)</code>. Never construct checkout tokens or URLs yourself.</p>
+    <p>This is the public partner API. Use the keys issued by your partner dashboard. Checkout may run on a different origin; pass the returned open cart to <code>TCGPlaytest.checkout(cart)</code>. Never construct checkout tokens or URLs yourself.</p>
     <div className={styles.heroLinks}><a href="/openapi.json"><Braces size={15} /> OpenAPI 3.1</a><a href="#go-live"><Rocket size={15} /> Prepare to go live</a></div>
   </>
 }
