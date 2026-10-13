@@ -1,11 +1,10 @@
 import { TERMS_VERSION } from "./manufacturing-contract"
 import { prepaidPaths, prepaidSchemas, prepaidLlms } from './prepaid-documentation'
 
-// Public documentation only. Read the same deployment limits as the API; never
-// import database clients or credentials into the public schema.
+// Public documentation uses the canonical partner API, including on preview hosts.
+// Read deployment limits only; never import database clients or credentials.
 export function documentationConfig() {
-  const configured = process.env.NEXT_PUBLIC_TCGPLAYTEST_APP_URL || process.env.NEXT_PUBLIC_CARDIFY_APP_URL || process.env.CARDIFY_APP_URL
-  const baseUrl = new URL(configured || "https://partner.tcgplaytest.com").origin
+  const baseUrl = "https://partner.tcgplaytest.com"
   return {
     baseUrl,
     maxCards: Number(process.env.PARTNER_MAX_CARDS || 1000),
