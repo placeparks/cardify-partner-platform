@@ -217,7 +217,8 @@ API path version: /v1. OpenAPI document revision is not a new API path version.
 ${prepaidLlms}
 
 ## Start here
-- [Complete single-page guide](${config.baseUrl}/docs): human setup, exact fields, limits, examples, errors, widget, webhooks and content obligations.
+- [Developer documentation](${config.baseUrl}/docs): human setup, exact fields, limits, examples, errors, widget, webhooks and content obligations.
+- [Going live](${config.baseUrl}/docs#go-live): partner launch steps and platform operator settings. Live Stripe credentials alone do not complete deployment setup; configure the live webhook secrets, live Tax, prepaid enablement and verify fulfillment. Existing schema and live partner keys remain valid.
 - [OpenAPI 3.1 schema](${config.baseUrl}/openapi.json): requests, responses, security and webhook payloads.
 - [Partner dashboard](${config.baseUrl}/dashboard): a human signs in with Google, completes the application, accepts the current partner terms and creates test/live keys. The human also configures the webhook URL and saves its displayed signing secret.
 - [Partner terms](${config.baseUrl}/terms): do not knowingly send unlawful/infringing content; remove and stop forwarding notified content; cooperate on complaints; orders may be refused, held or cancelled and repeat offenders suspended.

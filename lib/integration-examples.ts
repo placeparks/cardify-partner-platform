@@ -41,7 +41,7 @@ while [ "$(jq -r .status <<< "$cart")" = validating ]; do
   cart=$(request GET "/v1/carts/$id")
 done
 case "$(jq -r .status <<< "$cart")" in
-  open) jq -r .checkout_url <<< "$cart";; # Redirect only this customer; do not log in production.
+  open) jq -r .checkout_url <<< "$cart";; # Inspect in this script; web apps pass the owned cart to TCGPlaytest.checkout(cart).
   converted) order=$(jq -er .order_id <<< "$cart"); request GET "/v1/orders/$order";;
   *) jq '{status,errors}' <<< "$cart" >&2; exit 1;;
 esac`,
@@ -74,7 +74,7 @@ while cart["status"] == "validating":
     time.sleep(4)
     cart = api("GET", "/v1/carts/" + cart["id"])
 if cart["status"] == "open":
-    checkout_url = cart["checkout_url"]  # Return a redirect to the owning customer.
+    checkout_url = cart["checkout_url"]  # Return the owned cart to your UI; call TCGPlaytest.checkout(cart).
 elif cart["status"] == "converted" and cart.get("order_id"):
     order = api("GET", "/v1/orders/" + cart["order_id"])
 else:
