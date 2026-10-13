@@ -79,7 +79,7 @@ export function DocsShell({ topics, baseUrl }: { topics: DocsTopic[]; baseUrl: s
             {index > 0 ? <a href={`#${topics[index - 1].id}`} onClick={() => choose(topics[index - 1].id)}><ArrowLeft size={16} /><span><small>Previous</small>{topics[index - 1].title}</span></a> : <span />}
             {index < topics.length - 1 && <a href={`#${topics[index + 1].id}`} onClick={() => choose(topics[index + 1].id)}><span><small>Next</small>{topics[index + 1].title}</span><ArrowRight size={16} /></a>}
           </footer>
-          <p className={styles.footer}>TCGPlaytest · Cardify LLC <a href="/terms">Partner terms</a></p>
+          <p className={styles.footer}><a href="https://www.tcgplaytest.com/">TCGPlaytest · Cardify LLC</a> <a href="/terms">Partner terms</a></p>
         </article>
         <aside className={styles.rightRail} aria-label="On this page">
           <p>ON THIS PAGE</p>
