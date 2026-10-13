@@ -20,7 +20,9 @@ export async function POST(request: Request) { return api(async () => {
   // change the immutable shipping/price instructions or create a second payment.
   const hash = digest(JSON.stringify({ cart_id: cart.id, shipping, affiliate: body.affiliate_code || '', terms: accepted.terms_version, quality: accepted.image_quality_accepted }))
   let price = null
-  if (!cart.checkout_funding && process.env.PARTNER_PREPAID_ENABLED === 'true' && cart.api_key_id && Date.parse(cart.expires_at) > Date.now() + 65 * 60_000) {
+  // Both sources are saved by the platform. The database verifies widget/cart
+  // ownership and makes the funding decision and debit in one transaction.
+  if (!cart.checkout_funding && process.env.PARTNER_PREPAID_ENABLED === 'true' && (cart.api_key_id || cart.widget_session_id) && Date.parse(cart.expires_at) > Date.now() + 65 * 60_000) {
     const account = checked(await db.from('partner_credit_accounts').select('terms_version').eq('partner_id', cart.partner_id).maybeSingle())
     if (account?.terms_version === PREPAID_TERMS_VERSION) {
       const balance = await creditRpc('partner_credit_balance', { p_partner: cart.partner_id })
