@@ -4,6 +4,7 @@ import { CodeExample as Code, CodeTabs } from '@/components/docs/code-example'
 import { DocsOverview, GoLiveGuide } from '@/components/docs/docs-guides'
 import styles from '@/components/docs/docs.module.css'
 import Link from "next/link"
+import { ConnectGuide } from '@/components/docs/connect-guide'
 import { PrepaidGuide } from '@/components/prepaid-guide'
 import { createCartExample, documentationConfig, documentationExamples, validationErrors } from "@/lib/api-documentation"
 import { CUSTOMER_RIGHTS_STATEMENT } from "@/lib/manufacturing-contract"
@@ -64,7 +65,7 @@ if (!statusResponse.ok) throw new Error(status.error.message);
         <li>Choose your integration: for the <a href="#widget" className="underline">standalone widget</a>, copy your personalized snippet and connect finished card images. For a server API integration, create a test/live key under <strong>1. Server-side API keys</strong>. Keep that secret on your server; the standalone widget does not need it.</li>
         <li>For lifecycle notifications, configure <strong>2. Order webhooks</strong> and copy its separate signing secret. See <a href="#webhooks" className="underline">webhook setup</a>.</li>
       </ol>
-      <p>No Stripe Connect account is required. A test key runs artwork validation and opens a non-paying hosted preview. The optional prepaid sandbox supports simulated Stripe payments with test credit; test orders never print or ship. A live key enables payment checkout when that deployment is configured for it.</p>
+      <p>No Stripe Connect account is required for ordinary or prepaid checkout. Optional Connect payouts require onboarding. A test key runs artwork validation and opens a non-paying hosted preview. The optional prepaid sandbox supports simulated Stripe payments with test credit; test orders never print or ship. A live key enables payment checkout when that deployment is configured for it.</p>
       <h3>Authenticate from your server</h3>
       <p>Send your partner key as a bearer token. Bind every cart and upload reference to the owning customer session. Never place the secret in browser code or a public environment variable.</p>
       <Code label="Server environment">{`TCGP_API_BASE=${config.baseUrl}
@@ -186,6 +187,7 @@ if (cart.status === "open") TCGPlaytest.checkout(cart);
       <p>Checkout automatically returns to your saved success URL after the payment and order are verified, for both partner-credit and normal customer payments. A short confirmation screen waits if payment notifications are still arriving. Keep the cart ID tied to your customer session. Your success page must read the saved cart’s <code>order_id</code> and verify <code>GET /v1/orders/&#123;id&#125;</code>, or use a verified payment webhook. Never mark an order paid because a browser visited this URL. The checkout’s “Return to partner website” link goes to the registered website, not to a payment-success claim.</p>
     </section>
     ) },
+    { id:'connect', title:'Stripe Connect payouts', group:'Build your integration', description:'Set your card selling price and receive earnings, with a 5% reserve for 15 days.', keywords:'stripe connect fees payouts reserve revenue retail', content:<ConnectGuide baseUrl={config.baseUrl}/> },
     { id:"prepaid", title:"Printing credits", group:"Build your integration", description:"Use your balance for printing, with customer shipping and tax paid through Stripe.", keywords:"prepaid balance wallet buy credit reserve quotes orders sufficient insufficient refund /v1/prepaid", content: (
 <PrepaidGuide baseUrl={config.baseUrl} />
     ) },
@@ -244,11 +246,12 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
         ["items[].sha256 / back_sha256", "Optional 64-character hexadecimal SHA-256 of exact front/back file bytes, case-insensitive. Omit or use null for server-computed hashes. A mismatch fails that item/side."],
         ["back_image_url / back_sha256", "Optional shared back URL and hash. Used only for items without an item-specific back URL; an item-specific back uses its own back_sha256."],
         ["card_stock", 'Optional; only "standard" is supported, and is the default.'],
-        ["settlement", 'Optional: "hosted" (default) or "prepaid". Prepaid requires a key matching the platform Stripe mode and an enabled credit account; once artwork is open, quote, reserve credit and submit an order through the prepaid endpoints. Prepaid carts never expose checkout_url.'],
+        ["retail_amount_cents", "Required only for Connect: whole-cart card-sale subtotal, USD cents (50–5000000), excluding shipping/tax. Must cover printing; fees reduce earnings."],
+        ["settlement", 'Optional: "hosted" (default), "connect" or "prepaid". Connect requires onboarding and retail_amount_cents; it never spends printing credit. Prepaid requires a key matching the platform Stripe mode and an enabled credit account; once artwork is open, quote, reserve credit and submit an order through the prepaid endpoints. Prepaid carts never expose checkout_url.'],
         ["external_ref", "Optional string of at most 200 UTF-16 code units (200 ordinary characters); no format restriction. Omitted/empty input becomes null. Returned for your reference; does not enforce uniqueness or idempotency."],
         ["return_url", "Optional HTTPS URL on the exact registered website origin (scheme, hostname and port). Omit to use the registered website URL. A different subdomain is a different origin."],
       ]}/>
-      <p>Unknown request fields are rejected. Do not send <code>certification</code>, <code>affiliate_code</code>, prices, artwork-library IDs or partner-terms fields. The server copies the authenticated partner&apos;s accepted terms version and timestamp onto each new cart.</p>
+      <p>Unknown request fields are rejected. Do not send <code>certification</code>, <code>affiliate_code</code>, artwork-library IDs or partner-terms fields. The server copies the authenticated partner&apos;s accepted terms version and timestamp onto each new cart.</p>
       <Code label="Create cart request JSON">{pretty(createCartExample)}</Code>
       <p>Example response: <strong>HTTP 202</strong> with <code>Retry-After: 3</code>. The example timestamps are illustrative; your actual <code>expires_at</code> is authoritative.</p>
       <Code label="202 validating cart response">{pretty(examples.validating)}</Code>
@@ -270,7 +273,8 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
         ["errors", "Array of {item_index, side, code, message}. item_index is zero-based; side is front or back. Empty when no errors have been recorded."],
         ["partner_terms_version", "Partner terms version saved by the server, or null for older carts without that record."],
         ["mode", "test or live."],
-        ["settlement", 'Present as "prepaid" for prepaid carts. Omitted for hosted checkout.'],
+        ["settlement", 'Present as "prepaid" or "connect" for those carts. Omitted for hosted checkout.'],
+        ["retail_amount_cents", "Whole-cart card-sale subtotal in USD cents. Required only for Connect requests and returned for Connect carts. Shipping and tax are added separately."],
         ["checkout_url", "Present only for an open hosted-checkout cart. Always omitted for prepaid carts and other statuses, not null. Use a returned URL verbatim."],
         ["order_id", "Manufacturing order ID after payment is recorded; otherwise null. Use this for GET /v1/orders/{id}."],
         ["created_at / expires_at", "RFC 3339 timestamp strings with timezone, for example 2026-10-06T12:00:00.000Z. UTC may also be represented by +00:00; fractional seconds can vary."],
