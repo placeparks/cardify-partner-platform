@@ -25,6 +25,7 @@ export async function POST(request: Request) { return api(async () => {
   try { partnerWebsite = partnerReturnUrl(undefined, cart.partner.website_url) } catch {}
   // The commerce app receives counts and validated branding, never artwork credentials.
   return NextResponse.json({ id: cart.id, card_count: cart.card_count, affiliate_code: cart.affiliate_code, external_ref: cart.external_ref,
+    connect_retail_cents: cart.connect_retail_cents ?? null, connect_payment_mode: cart.connect_payment_mode ?? null,
     expires_at: cart.expires_at, partner_id: cart.partner_id, warnings: cart.artwork_warnings || [],
     branding: checkoutBranding(cart.partner.checkout_branding), partner_website: partnerWebsite,
     checkout_frame_origins: [partnerWebsite, ...(cart.partner.widget_allowed_origins || [])].filter(Boolean),
