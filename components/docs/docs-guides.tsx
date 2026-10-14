@@ -8,7 +8,7 @@ export function DocsOverview({ baseUrl }: { baseUrl: string }) {
       <span className={styles.eyebrow}>TCGPlaytest for developers</span>
       <h1>Your card experience.<br /><span>Our printing API.</span></h1>
       <p>Turn finished artwork into cards delivered to your customers. Build on your own website. We handle artwork validation, printing and shipping.</p>
-      <div className={styles.heroLinks}><a href="#before-you-start">Start building <ArrowRight size={15} /></a><a href="#create-cart">Explore the API <ArrowRight size={14} /></a></div>
+      <div className={styles.heroLinks}><a href="/docs/before-you-start">Start building <ArrowRight size={15} /></a><a href="/docs/create-cart">Explore the API <ArrowRight size={14} /></a></div>
     </div>
     <h2>From artwork to checkout</h2>
     <div className={styles.quickGrid}>
@@ -32,16 +32,16 @@ export function DocsOverview({ baseUrl }: { baseUrl: string }) {
     <p>The example uses a placeholder image URL. Use your own public artwork or a completed upload reference. Run it on your server or terminal, then save the returned cart ID against the customer&apos;s order.</p>
     <h2>Choose how you build</h2>
     <div className={styles.cards}>
-      <a href="#widget"><Layers3 size={22} /><strong>Drop-in widget <ArrowRight size={15} /></strong><p>Connect your finished card images. The widget handles review, uploads and checkout.</p></a>
-      <a href="#language-examples"><Code2 size={22} /><strong>Server-side API <ArrowRight size={15} /></strong><p>Own your storefront. Get started with cURL, Node.js, Python or PHP.</p></a>
-      <a href="#branding"><Palette size={22} /><strong>Make checkout yours <ArrowRight size={15} /></strong><p>Add your logo, colors and welcome message. Bring customers back to your website.</p></a>
-      <a href="#prepaid"><CreditCard size={22} /><strong>Pay with printing credit <ArrowRight size={15} /></strong><p>Fund printing from your balance. Customers pay shipping and fulfillment tax through Stripe.</p></a>
+      <a href="/docs/widget"><Layers3 size={22} /><strong>Drop-in widget <ArrowRight size={15} /></strong><p>Connect your finished card images. The widget handles review, uploads and checkout.</p></a>
+      <a href="/docs/language-examples"><Code2 size={22} /><strong>Server-side API <ArrowRight size={15} /></strong><p>Own your storefront. Get started with cURL, Node.js, Python or PHP.</p></a>
+      <a href="/docs/branding"><Palette size={22} /><strong>Make checkout yours <ArrowRight size={15} /></strong><p>Add your logo, colors and welcome message. Bring customers back to your website.</p></a>
+      <a href="/docs/prepaid"><CreditCard size={22} /><strong>Pay with printing credit <ArrowRight size={15} /></strong><p>Fund printing from your balance. Customers pay shipping and fulfillment tax through Stripe.</p></a>
     </div>
     <div className={styles.callout}><ShieldCheck size={19} /><p><strong>Your key stays on your server.</strong> The API uses bearer authentication. The standalone widget uses a public partner identifier and does not need your secret key.</p></div>
     <h2 id="api-base">One API. Your own storefront.</h2>
     <div className={styles.endpoint}><span>BASE URL</span><code>{baseUrl}</code></div>
     <p>This is the public partner API. Use the keys issued by your partner dashboard. Checkout may run on a different origin; pass the returned open cart to <code>TCGPlaytest.checkout(cart)</code>. Never construct checkout tokens or URLs yourself.</p>
-    <div className={styles.heroLinks}><a href="/openapi.json"><Braces size={15} /> OpenAPI 3.1</a><a href="#go-live"><Rocket size={15} /> Prepare to go live</a></div>
+    <div className={styles.heroLinks}><a href="/openapi.json"><Braces size={15} /> OpenAPI 3.1</a><a href="/docs/go-live"><Rocket size={15} /> Prepare to go live</a></div>
   </>
 }
 

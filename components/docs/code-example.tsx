@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import styles from './docs.module.css'
 
@@ -37,10 +37,12 @@ export function CodeExample({ label, children }: { label: string; children: stri
 
 export function CodeTabs({ examples }: { examples: { label: string; code: string }[] }) {
   const [active, setActive] = useState(0)
+  const [enhanced, setEnhanced] = useState(false)
   const id = useId()
+  useEffect(() => setEnhanced(true), [])
   return <div className={styles.codeTabs}>
-    <div role="tablist" aria-label="Example language" className={styles.tabs}>
-      {examples.map((example, i) => <button key={example.label} type="button" role="tab" id={`${id}-tab-${i}`} aria-selected={active === i} aria-controls={`${id}-panel`} tabIndex={active === i ? 0 : -1}
+    <div role="tablist" aria-label="Example language" className={styles.tabs} style={enhanced ? undefined : { display: 'none' }}>
+      {examples.map((example, i) => <button key={example.label} type="button" role="tab" id={`${id}-tab-${i}`} aria-selected={active === i} aria-controls={`${id}-panel-${i}`} tabIndex={active === i ? 0 : -1}
         onClick={() => setActive(i)} onKeyDown={event => {
           let next = i
           if (event.key === 'ArrowRight') next = (i + 1) % examples.length
@@ -51,6 +53,6 @@ export function CodeTabs({ examples }: { examples: { label: string; code: string
           event.preventDefault(); setActive(next); document.getElementById(`${id}-tab-${next}`)?.focus()
         }}>{example.label}</button>)}
     </div>
-    <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-${active}`}><CodeExample key={active} label={examples[active].label}>{examples[active].code}</CodeExample></div>
+    {examples.map((example, i) => <div key={example.label} role={enhanced ? 'tabpanel' : undefined} id={`${id}-panel-${i}`} aria-labelledby={enhanced ? `${id}-tab-${i}` : undefined} hidden={enhanced && active !== i}><CodeExample label={example.label}>{example.code}</CodeExample></div>)}
   </div>
 }

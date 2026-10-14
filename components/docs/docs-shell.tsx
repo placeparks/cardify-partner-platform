@@ -1,13 +1,17 @@
 "use client"
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, BookOpen, Braces, ChevronRight, FileJson, Menu, Search, X } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, ArrowRight, BookOpen, Braces, ChevronRight, FileJson, LifeBuoy, Menu, Search, X } from 'lucide-react'
 import styles from './docs.module.css'
 
 export type DocsTopic = { id: string; title: string; group: string; description: string; keywords?: string; method?: string; content: ReactNode }
 
-export function DocsShell({ topics, baseUrl }: { topics: DocsTopic[]; baseUrl: string }) {
-  const [active, setActive] = useState('overview')
+const topicHref = (id: string) => id === 'overview' ? '/docs' : `/docs/${id}`
+
+export function DocsShell({ topics, active, baseUrl, children }: { topics: Omit<DocsTopic, 'content'>[]; active: string; baseUrl: string; children: ReactNode }) {
+  const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [toc, setToc] = useState<{ id: string; label: string }[]>([])
@@ -23,8 +27,11 @@ export function DocsShell({ topics, baseUrl }: { topics: DocsTopic[]; baseUrl: s
       let hash = window.location.hash.slice(1)
       try { hash = decodeURIComponent(hash) } catch { /* Ignore malformed fragments. */ }
       const id = hash === 'api-base' ? 'overview' : hash.split('--')[0]
-      if (!id) setActive('overview')
-      else if (topics.some(item => item.id === id)) setActive(id)
+      // Keep bookmarks such as /docs#connect working without hiding content behind client state.
+      if (id !== active && topics.some(item => item.id === id)) {
+        const anchor = hash.includes('--') || hash === 'api-base' ? `#${hash}` : ''
+        router.replace(topicHref(id) + anchor)
+      }
       setMenuOpen(false)
     }
     readHash(); window.addEventListener('hashchange', readHash)
@@ -34,21 +41,21 @@ export function DocsShell({ topics, baseUrl }: { topics: DocsTopic[]; baseUrl: s
     }
     window.addEventListener('keydown', shortcut)
     return () => { window.removeEventListener('hashchange', readHash); window.removeEventListener('keydown', shortcut) }
-  }, [topics])
+  }, [active, router, topics])
 
   useEffect(() => {
-    document.title = `${topic.title} · TCGPlaytest Docs`
+    setMenuOpen(false); dialog.current?.close()
     const headings = Array.from(article.current?.querySelectorAll<HTMLElement>('h2, h3') || []).filter(el => getComputedStyle(el).display !== 'none')
     headings.forEach((heading, i) => { if (!heading.id) heading.id = `${active}--section-${i}` })
     setToc(headings.map(heading => ({ id: heading.id, label: heading.textContent || '' })))
-    const anchor = window.location.hash.slice(1)
+    let anchor = window.location.hash.slice(1)
+    try { anchor = decodeURIComponent(anchor) } catch { /* Ignore malformed fragments. */ }
     if (anchor.includes('--') || anchor === 'api-base') document.getElementById(anchor)?.scrollIntoView()
     else window.scrollTo({ top: 0, behavior: 'instant' })
   }, [active, topic.title])
 
-  function choose(id: string) {
-    setActive(id); setMenuOpen(false); dialog.current?.close()
-    if (window.location.hash === `#${id}`) window.scrollTo({ top: 0, behavior: 'instant' })
+  function choose() {
+    setMenuOpen(false); dialog.current?.close()
   }
 
   return <div className={styles.shell}>
@@ -63,27 +70,27 @@ export function DocsShell({ topics, baseUrl }: { topics: DocsTopic[]; baseUrl: s
       <aside id="docs-navigation" className={`${styles.sidebar} ${menuOpen ? styles.menuOpen : ''}`}>
         <div className={styles.sidebarTitle}><BookOpen size={16} /> Developer documentation <span>v1</span></div>
         <nav aria-label="Documentation topics">{groups.map(group => <div className={styles.navGroup} key={group}>
-          <p>{group}</p>{topics.filter(item => item.group === group).map(item => <a href={`#${item.id}`} key={item.id} aria-current={active === item.id ? 'page' : undefined} onClick={() => choose(item.id)}>
+          <p>{group}</p>{topics.filter(item => item.group === group).map(item => <Link prefetch={false} href={topicHref(item.id)} key={item.id} aria-current={active === item.id ? 'page' : undefined} onClick={choose}>
             {item.method && <span className={styles.method} data-method={item.method}>{item.method}</span>}{item.title}
-          </a>)}
+          </Link>)}
         </div>)}</nav>
-        <div className={styles.resources}><a href="/openapi.json"><FileJson size={16} />OpenAPI specification</a><a href="/llms.txt"><Braces size={16} />Docs for AI agents</a></div>
+        <div className={styles.resources}><a href="/openapi.json"><FileJson size={16} />OpenAPI specification</a><a href="/llms.txt"><Braces size={16} />Docs for AI agents</a><a href="https://www.tcgplaytest.com/support"><LifeBuoy size={16} />Contact support</a></div>
       </aside>
       {menuOpen && <button type="button" aria-label="Close documentation menu" className={styles.backdrop} onClick={() => setMenuOpen(false)} />}
       <div className={styles.readingArea}>
         <article id="docs-content" ref={article} tabIndex={-1} className={styles.article} key={topic.id}>
           <div className={styles.breadcrumb}>Documentation <ChevronRight size={13} /> {topic.group}</div>
           {active !== 'overview' && <div className={styles.pageIntro}><span className={styles.eyebrow}>{topic.method ? 'API reference' : topic.group}</span><h1>{topic.title}</h1><p>{topic.description}</p></div>}
-          <div className={styles.content}>{topic.content}</div>
+          <div className={styles.content}>{children}</div>
           <footer className={styles.pagination}>
-            {index > 0 ? <a href={`#${topics[index - 1].id}`} onClick={() => choose(topics[index - 1].id)}><ArrowLeft size={16} /><span><small>Previous</small>{topics[index - 1].title}</span></a> : <span />}
-            {index < topics.length - 1 && <a href={`#${topics[index + 1].id}`} onClick={() => choose(topics[index + 1].id)}><span><small>Next</small>{topics[index + 1].title}</span><ArrowRight size={16} /></a>}
+            {index > 0 ? <Link prefetch={false} href={topicHref(topics[index - 1].id)} onClick={choose}><ArrowLeft size={16} /><span><small>Previous</small>{topics[index - 1].title}</span></Link> : <span />}
+            {index < topics.length - 1 && <Link prefetch={false} href={topicHref(topics[index + 1].id)} onClick={choose}><span><small>Next</small>{topics[index + 1].title}</span><ArrowRight size={16} /></Link>}
           </footer>
-          <p className={styles.footer}><a href="https://www.tcgplaytest.com/">TCGPlaytest · Cardify LLC</a> <a href="/terms">Partner terms</a></p>
+          <p className={styles.footer}><a href="https://www.tcgplaytest.com/">TCGPlaytest · Cardify LLC</a> <a href="/terms">Partner terms</a> <a href="https://www.tcgplaytest.com/support">Support</a></p>
         </article>
         <aside className={styles.rightRail} aria-label="On this page">
           <p>ON THIS PAGE</p>
-          {toc.length ? toc.map(item => <a key={item.id} href={`#${item.id}`}>{item.label}</a>) : <a href={`#${topic.id}`} onClick={() => choose(topic.id)}>{topic.title}</a>}
+          {toc.length ? toc.map(item => <a key={item.id} href={`#${item.id}`}>{item.label}</a>) : <a href="#docs-content">{topic.title}</a>}
           <div className={styles.helpCard}><Braces size={19} /><strong>Build with your tools</strong><p>Use the OpenAPI schema in your editor, or give your coding agent our API guide.</p><a href="/llms.txt">Open agent guide <ArrowRight size={13} /></a></div>
           <div className={styles.origin}><span>API BASE URL</span><code>{baseUrl}</code></div>
         </aside>
@@ -92,7 +99,7 @@ export function DocsShell({ topics, baseUrl }: { topics: DocsTopic[]; baseUrl: s
     <dialog ref={dialog} className={styles.searchDialog} aria-label="Search documentation" onClose={() => setQuery('')} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close() }}>
       <div className={styles.searchInput}><Search size={19} /><input autoFocus aria-label="Search guides and endpoints" placeholder="Search guides and endpoints…" value={query} onChange={event => setQuery(event.target.value)} /><button type="button" aria-label="Close search" onClick={() => dialog.current?.close()}><X size={18} /></button></div>
       <p className={styles.searchCount} aria-live="polite">{results.length} {results.length === 1 ? 'topic' : 'topics'}</p>
-      <div className={styles.searchResults}>{results.map(item => <a key={item.id} href={`#${item.id}`} onClick={() => choose(item.id)}><span>{item.group}</span><strong>{item.title}<ArrowRight size={15} /></strong><p>{item.description}</p></a>)}{!results.length && <p>No matching topics. Try “uploads”, “credits”, “Python” or “webhooks”.</p>}</div>
+      <div className={styles.searchResults}>{results.map(item => <Link prefetch={false} key={item.id} href={topicHref(item.id)} onClick={choose}><span>{item.group}</span><strong>{item.title}<ArrowRight size={15} /></strong><p>{item.description}</p></Link>)}{!results.length && <p>No matching topics. Try “uploads”, “credits”, “Python” or “webhooks”.</p>}</div>
     </dialog>
   </div>
 }
