@@ -1,8 +1,24 @@
 {
   "crons": [
-    { "path": "/api/internal/prepaid-maintenance", "schedule": "* * * * *" },
-    { "path": "/api/internal/validation", "schedule": "* * * * *" },
-    { "path": "/api/internal/maintenance", "schedule": "* * * * *" },
-    { "path": "/api/internal/widget-maintenance", "schedule": "*/10 * * * *" }
+    {
+      "path": "/api/internal/prepaid-maintenance",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/validation",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/maintenance",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/internal/widget-maintenance",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/internal/connect-maintenance",
+      "schedule": "* * * * *"
+    }
   ]
 }
