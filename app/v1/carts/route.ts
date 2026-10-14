@@ -5,6 +5,7 @@ import { ApiError, DEFAULT_CARD_BACK_PATH, partnerReturnUrl, validateCart } from
 import { assertUploadOwner } from "@/lib/partner-uploads"
 import { scheduleCartValidation } from "@/lib/validation-dispatch"
 import { prepaidKey, prepaidName } from '@/lib/prepaid-contract'
+import { readyConnect, connectMode } from '@/lib/connect'
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -28,6 +29,11 @@ export async function POST(request: Request) { return api(async () => {
     if (existing.request_hash !== requestHash && existing.request_hash !== legacyRequestHash) throw new ApiError(409, "idempotency_conflict", "That key was used with different manufacturing instructions")
     return NextResponse.json(publicCart(existing), { status: existing.status === "validating" ? 202 : 200, headers: { "Cache-Control": "no-store", "Retry-After": "3" } })
   }
+  let connect: any = null
+  if (body.settlement === 'connect') {
+    if (key.mode !== 'live') throw new ApiError(400,'connect_key_required','Use a live partner API key for Connect. Stripe credentials select the payment environment.')
+    connect = await readyConnect(key.partner)
+  }
   for (const item of body.items) {
     assertUploadOwner(item.image_url, key)
     assertUploadOwner(item.back_image_url, key)
@@ -41,8 +47,9 @@ export async function POST(request: Request) { return api(async () => {
   const retentionDays = Number(process.env.PARTNER_ARTWORK_RETENTION_DAYS || 30)
   if (!Number.isInteger(expiryHours) || expiryHours < 1 || expiryHours > 168 || !Number.isInteger(retentionDays) || retentionDays < 0 || retentionDays > 365) throw new ApiError(503, "configuration_error", "Artwork retention configuration is invalid")
   const cart = { id, partner_id: key.partner_id, api_key_id: key.id, mode: key.mode, status: "validating", external_ref: body.external_ref,
-    settlement: body.settlement || 'hosted',
-    card_count: body.card_count, card_stock: body.card_stock, affiliate_code: body.settlement === 'prepaid' ? null : key.partner.checkout_affiliate_code || null, return_url: returnUrl,
+    settlement: body.settlement === 'connect' ? 'hosted' : body.settlement || 'hosted',
+    connect_retail_cents: connect ? body.retail_amount_cents : null, connect_account_id: connect?.stripe_account_id || null, connect_payment_mode: connect ? connectMode() : null,
+    card_count: body.card_count, card_stock: body.card_stock, affiliate_code: ['prepaid','connect'].includes(body.settlement) ? null : key.partner.checkout_affiliate_code || null, return_url: returnUrl,
     partner_terms_version: key.partner.terms_version, partner_terms_accepted_at: key.partner.terms_accepted_at,
     certification: null, certification_text: {}, submitted_by: key.partner.user_id,
     flow_version: 2, validation_done: 0, validation_total: 0, validation_errors: [], retention_days: retentionDays,
