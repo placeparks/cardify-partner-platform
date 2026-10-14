@@ -15,6 +15,7 @@ export async function POST(request: Request) { return api(async () => {
   const accepted = acceptance(body.acceptance)
   if (accepted.email !== shipping.email) throw new ApiError(400, 'invalid_request', 'The shipping and acceptance emails must match.')
   const cart = checked(await db.from('partner_carts').select('*').eq('checkout_token_hash', digest(String(body.token || ''))).maybeSingle())
+  if (cart?.connect_retail_cents != null) throw new ApiError(409,'connect_cart','Connect orders use separate settlement and never spend printing credit.')
   if (!cart || cart.mode !== 'live' || cart.settlement !== 'hosted') throw new ApiError(404, 'not_found', 'Hosted cart not found.')
   // Acceptance time is recorded separately. Retrying a customer's click must not
   // change the immutable shipping/price instructions or create a second payment.
