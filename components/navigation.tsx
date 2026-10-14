@@ -64,6 +64,7 @@ export function Navigation() {
             </Link>
           )}
           {canSeeDashboard && <Link href="/dashboard/credits" aria-current={pathname === '/dashboard/credits' ? 'page' : undefined} className="flex min-h-11 items-center gap-2 rounded border border-green/40 bg-green/10 px-3 py-2 text-green transition hover:bg-green/20"><Wallet className="h-4 w-4" aria-hidden="true"/>Buy credits</Link>}
+          {canSeeDashboard && <Link href="/dashboard/connect" className="flex min-h-11 items-center px-3 py-2 text-cyan">Payouts</Link>}
           {/* Partnership administration lives in the testing dashboard.
           {canSeeAdmin && (
             <Link href="/admin" className="hidden border border-cyan/25 bg-white/[0.03] px-3 py-2 text-cyan transition hover:border-green hover:text-green sm:inline-flex">
