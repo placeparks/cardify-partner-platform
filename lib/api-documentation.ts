@@ -7,6 +7,9 @@ export function documentationConfig() {
   const baseUrl = "https://partner.tcgplaytest.com"
   return {
     baseUrl,
+    widgetSessionsPerHour: Number(process.env.WIDGET_SESSIONS_PER_HOUR || 60),
+    widgetUploadsPerSession: Number(process.env.WIDGET_UPLOADS_PER_SESSION || 2000),
+    widgetUploadsPerDay: Number(process.env.WIDGET_UPLOADS_PER_PARTNER_DAY || 10000),
     maxCards: Number(process.env.PARTNER_MAX_CARDS || 1000),
     rateLimit: Math.min(600, Math.max(1, Number(process.env.PARTNER_RATE_LIMIT || 60))),
     minWidth: Number(process.env.PARTNER_MIN_IMAGE_WIDTH || 744),
@@ -92,21 +95,27 @@ export function buildOpenApi(config = documentationConfig()) {
     security: [{ PartnerApiKey: [] }],
     tags: [{ name: "Uploads" }, { name: "Carts" }, { name: "Orders" }, { name: "Widget" }, { name: 'Prepaid' }],
     paths: {
-      ...prepaidPaths,
+      ...Object.fromEntries(Object.entries(prepaidPaths).map(([path, methods]) => [path,
+        Object.fromEntries(Object.entries(methods).map(([method, operation]) => [method, {
+          ...operation,
+          description: ('description' in operation ? operation.description + ' ' : '') +
+            `Counts toward the shared ${config.rateLimit} requests per API key per minute, including quote polling, balance reads, reserve/release and retries. This is not a separate prepaid allowance. Poll quotes every five seconds or slower and budget across all concurrent orders. On 429, honor Retry-After; retry mutations with the same body and idempotency key where required. Only authenticated cart-status GETs are exempt.`,
+        }]))
+      ])),
       "/v1/estimate": { get: { operationId: "estimatePrinting", security: [], summary: "Estimate standard-card printing before uploading",
         description: "Amounts are USD cents. Shipping, tax and discounts are excluded. Checkout recalculates the final price. A temporary estimate failure never blocks cart creation.",
         parameters: [{name:"quantity",in:"query",required:true,schema:{type:"integer",minimum:1,maximum:1000}}],
         responses: {"200":{description:"Printing estimate",content:{"application/json":{schema:object({currency:{type:"string",const:"USD"},quantity:{type:"integer"},unit_amount:{type:"integer"},subtotal_amount:{type:"integer"},excludes:{type:"array",items:{type:"string"}}})}}},...errors([400,503])} } },
       "/api/widget/sessions": { post: {
         operationId: "startWidgetSession", tags: ["Widget"], security: [], summary: "Start a standalone widget session using a public partner code",
-        description: "The browser Origin must match the registered website or an additional widget origin. Requires active partnership and current terms. No API key. Defaults to at most 60 new sessions per partner/hour; the operator may override this. Token expires in one hour and authorizes only this session's uploads and one cart.",
+        description: `The browser Origin must match the registered website or an additional widget origin. Requires active partnership and current terms. No API key. Configured quota: ${config.widgetSessionsPerHour} new sessions per partner/hour (default 60). Token expires in one hour and authorizes only this session's uploads and one cart. Widget quotas are separate from the API-key rate limit.`,
         parameters: [{name:"Origin",in:"header",required:true,schema:{type:"string",format:"uri"}}],
         requestBody: {required:true,content:{"application/json":{schema:object({partner_key:{type:"string",pattern:"^partner_[a-f0-9]{24,32}$"},mode:{type:"string",enum:["test","live"]}})}}},
         responses: {"201":{description:"Customer-scoped token; never log or share it.",content:{"application/json":{schema:object({token:string,expires_at:timestamp,mode:{type:"string",enum:["test","live"]},max_cards:{type:"integer"},max_image_bytes:{type:"integer",const:20971520}})}}},...errors([400,403,413,429,500,503])},
       }},
       "/api/widget/uploads": { post: {
         operationId:"createWidgetUpload",tags:["Widget"],security:[{WidgetSession:[]}],summary:"Reserve a session-owned direct-storage upload",
-        description:"Send Origin and the session bearer token. Reuse request_id for an identical retry. Returns a two-hour non-overwriting storage grant. PUT raw bytes with returned headers, without the widget token or cookies. Defaults: 100 grants/session and 500 grants/partner/rolling 24 hours, reserving a full 20 MiB per grant. The operator may override these quotas.",
+        description:`Send Origin and the session bearer token. Reuse request_id for an identical retry. Returns a two-hour non-overwriting storage grant. PUT raw bytes with returned headers, without the widget token or cookies. Configured quotas: ${config.widgetUploadsPerSession} grants/session and ${config.widgetUploadsPerDay} grants/partner/rolling 24 hours (defaults 2,000 and 10,000). Each grant reserves a full 20 MiB. Front and back images each use a grant; reusing an uploaded image for copies does not create extra uploads. Operator environment overrides apply.`,
         requestBody:{required:true,content:{"application/json":{schema:object({request_id:{type:"string",format:"uuid"},content_type:{type:"string",enum:["image/png","image/jpeg"]},size:{type:"integer",minimum:1,maximum:20971520}})}}},
         responses:{"201":{description:"Upload the bytes before creating the cart.",content:{"application/json":{schema:object({id:{type:"string",format:"uuid"},upload_url:{type:"string",format:"uri"},method:{type:"string",const:"PUT"},headers:object({"Content-Type":{type:"string",enum:["image/png","image/jpeg"]}}),max_bytes:{type:"integer",const:20971520},upload_expires_at:timestamp})}}},...errors([400,401,403,409,413,429,500,503])},
       }},
@@ -217,6 +226,7 @@ export function buildLlmsText(config = documentationConfig()) {
 API base URL: ${config.baseUrl}
 API path version: /v1. OpenAPI document revision is not a new API path version.
 ${prepaidLlms}
+- Rate limits: ALL /v1/prepaid endpoints share the ${config.rateLimit} requests per API key per minute allowance with upload-grant POSTs, cart POSTs and order GETs. This includes quote creation, quote GET polling, reserve, release, prepaid order submission, balance/ledger reads and retries. Quote polling is NOT exempt; only authenticated cart-status GETs are exempt. Poll quotes every five seconds or slower, budget across concurrent orders, and honor Retry-After on HTTP 429. Preserve the original body and idempotency key when retrying mutations.
 
 ## Stripe Connect payouts
 Optional US partner server API flow. Complete Dashboard /dashboard/connect onboarding and terms. POST /v1/carts with settlement:"connect" and retail_amount_cents (whole card-sale subtotal, USD cents, 50–5000000, excluding shipping/tax, at least printing cost). Use the existing live partner key; Stripe credentials select payment environment. Upload/poll/embed/return as usual. Connect never spends prepaid credit, and cannot accept affiliate discounts. The standalone widget retains automatic credit-or-normal checkout; Connect retail pricing needs the server API.
@@ -244,7 +254,7 @@ Earnings = retail subtotal minus printing cost minus actual Stripe processing fe
 - image_url is a private signed capability, scoped to the partner and key mode and valid for 8 days; do not log/share it. Create the cart promptly. Issuing key revocation disables source access. Source staging files are removed by maintenance after expiry (normally within the following day). Validated cart files follow the retention rules below. Test keys support uploads; only prepaid sandbox supports simulated Stripe payments.
 - POST /v1/carts requires Idempotency-Key: 1–200 visible ASCII characters, no spaces. Body: items with image_url, quantity and optional item/shared back_image_url (omitting both backs selects the TCGPlaytest default); optional hashes, external_ref, return_url, standard card_stock and settlement (hosted by default, or prepaid for enabled live accounts).
 - Do not send certification, affiliate_code or partner-terms fields. retail_amount_cents is accepted only with settlement:connect. Terms version and saved affiliate preference are copied by the server. The customer certifies image rights at checkout; the partner still has the obligations above.
-- New POST returns 202, status validating, no checkout_url. GET /v1/carts/{id} every 3–5 seconds; honor Retry-After. Polling is authenticated but exempt from the ${config.rateLimit}/minute/key write/order limit.
+- New POST returns 202, status validating, no checkout_url. GET /v1/carts/{id} every 3–5 seconds; honor Retry-After. Polling is authenticated but exempt from the ${config.rateLimit}/minute/key shared upload, cart, order and prepaid limit.
 - For an open hosted cart, pass the cart to TCGPlaytest.checkout(cart) to stay on the partner page. A full-page handoff can instead use checkout_url verbatim. Prepaid carts never expose checkout_url: after open, quote, reserve credit and submit through the prepaid endpoints below. For failed, inspect every errors entry (item_index is zero-based; side, code, message), fix inputs and create a new cart with a new Idempotency-Key. Do not rotate the API key. Other terminal states: converted, expired, blocked, cancelled. A converted prepaid cart confirms fulfillment funding, not the shopper's separate payment to your store.
 - Maximum ${config.maxCards} items AND ${config.maxCards} total quantity; JSON body ≤512,000 bytes; external_ref ≤200 UTF-16 code units; HTTPS URLs ≤2048 UTF-16 code units.
 - Artwork: public IPv4 HTTPS, PNG/JPEG single frame, ≤20 MiB, ≤40,000,000 pixels, recommended ${config.minWidth}×${config.minHeight}. Smaller readable files are accepted with warnings (code image_low_resolution, item_index, side, source width/height and recommended_width/recommended_height). Hosted checkout allows ordering after acknowledging the warning. At most 3 redirects. Total download deadline 15 seconds per URL attempt, including DNS/TLS/redirects/body. Private/local addresses are blocked.
@@ -263,7 +273,7 @@ Earnings = retail subtotal minus printing cost minus actual Stripe processing fe
 - POST /api/widget/sessions with {partner_key,mode} returns {token,expires_at,mode,max_cards,max_image_bytes}. Session lives one hour, is scoped to a partner, origin and mode, and can create only one cart.
 - With Authorization: Bearer <session token>, POST /api/widget/uploads with {request_id: UUID,content_type,size} returns {id,upload_url,method,headers,max_bytes,upload_expires_at}. PUT bytes directly to the returned URL without Authorization/cookies. Storage grants last two hours and cannot overwrite.
 - POST /api/widget/cart with {items:[{front_upload_id,back_upload_id?,quantity}],external_ref?}; only session-owned uploads accepted. GET /api/widget/cart polls that same cart. Both return the documented Cart shape. Use Origin and the session token on these calls, never a secret API key.
-- Defaults: 60 sessions/partner/hour, 100 grants/session, 500 grants/partner/rolling 24 hours; reserve 20 MiB per grant. Operators can adjust quotas. Cart GET is exempt. Honor Retry-After on 429.
+- Configured widget quotas: ${config.widgetSessionsPerHour} sessions/partner/hour, ${config.widgetUploadsPerSession} upload grants/session, ${config.widgetUploadsPerDay} grants/partner/rolling 24 hours. Defaults are 60, 2,000 and 10,000 respectively; operator environment overrides apply. These quotas are separate from the API-key rate limit. Each front/back upload consumes a grant reserving up to 20 MiB; copies can reuse an uploaded image. Identical request_id retries reuse the grant. Widget cart GET is exempt from session/upload quotas. Honor Retry-After on 429.
 - Partner terms, affiliate setting, order ownership and analytics are assigned server-side. Public codes and Origin checks alone do not authenticate non-browser callers; expiring sessions, quotas and ownership checks limit public upload access.
 `
 }
