@@ -26,7 +26,7 @@ export function Navigation() {
   }
 
   useEffect(() => {
-    if (pathname === "/docs") return
+    if ((pathname === "/docs" || pathname.startsWith("/docs/"))) return
     const supabase = getSupabaseBrowserClient()
     refreshNavAccess()
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -36,7 +36,7 @@ export function Navigation() {
     return () => data.subscription.unsubscribe()
   }, [pathname])
 
-  if (pathname === "/docs") return null
+  if ((pathname === "/docs" || pathname.startsWith("/docs/"))) return null
 
   return (
     <nav aria-label="Main navigation" onKeyDown={event => {
