@@ -1,3 +1,36 @@
+import Link from 'next/link'
+import { ArrowLeft, Sparkles } from 'lucide-react'
+
+// Temporary Connect screen. To restore the original page, remove this
+// component and its imports, then uncomment the complete original page below.
+export default function ConnectComingSoonPage() {
+  return (
+    <section aria-labelledby="connect-coming-soon-title" className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-4xl items-center px-5 py-12 sm:py-20">
+      <div className="relative w-full overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#0f172a]/80 px-6 py-12 text-center shadow-[0_24px_100px_rgba(0,0,0,0.3)] sm:px-12 sm:py-16">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-cyan-400/10 to-transparent" />
+        <div className="relative mx-auto max-w-xl">
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-emerald-200">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+            Available soon
+          </span>
+          <div aria-hidden="true" className="mx-auto mt-8 flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-200">
+            <Sparkles className="h-8 w-8" />
+          </div>
+          <p className="mt-6 font-mono text-xs uppercase tracking-[0.2em] text-cyan-200">Stripe Connect</p>
+          <h1 id="connect-coming-soon-title" className="mt-4 text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">We’re enhancing your payout experience.</h1>
+          <p className="mt-5 text-base leading-7 text-slate-300">We’re making improvements to Stripe Connect for our partners. It will be available again soon.</p>
+          <p className="mt-3 text-sm text-slate-400">Thank you for your patience.</p>
+          <Link href="/dashboard" className="mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-6 py-3 font-semibold text-cyan-100 transition hover:border-cyan-300/60 hover:bg-cyan-300/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300">
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ORIGINAL CONNECT PAGE — temporarily commented out, kept intact for reopening.
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -28,3 +61,4 @@ export default function ConnectPage(){
   </>}
  </main>
 }
+*/
