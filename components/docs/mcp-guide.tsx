@@ -108,7 +108,7 @@ gemini mcp list`}</CodeExample>
       <li><code>quote_card_order</code> — printing and shipping estimate for a quantity and two-letter country code.</li>
       <li><code>create_card_artwork_upload</code> — temporary upload URL for a PNG/JPEG. PUT the actual file bytes with the returned headers, then use the returned image reference.</li>
       <li><code>prepare_card_order</code> — artwork URLs and quantities, plus a fresh random UUID in <code>request_id</code>. Reuse that ID with identical inputs on retries.</li>
-      <li><code>get_card_order_preparation</code> — poll with the returned private <code>preparation_token</code>, at least five seconds apart. Once <code>status</code> is <code>open</code>, share <code>preview_url</code> with the customer; <code>checkout_url</code> is also returned.</li>
+      <li><code>get_card_order_preparation</code> — poll with the returned private <code>preparation_token</code>, at least five seconds apart. Once <code>status</code> is <code>open</code>, share <code>preview_url</code> with the customer; checkout and private confirmation links are also returned.</li>
     </ul>
     <CodeExample label="prepare_card_order · example tool arguments">{JSON.stringify({
       request_id: '4c48ff46-29b0-49a3-a2e0-0bb6ad93f419',
@@ -116,11 +116,21 @@ gemini mcp list`}</CodeExample>
     }, null, 2)}</CodeExample>
     <p>Replace the example URLs with your actual artwork and generate your own UUID for each new order attempt. These are MCP tool arguments, not a REST request to the partner API. Omitting <code>back_image_url</code> uses the standard TCGPlaytest back.</p>
 
+    <h2 id="mcp--confirmation">After payment: confirmation for you and your assistant</h2>
+    <p>MCP checkout opens its own TCGPlaytest confirmation page after verified payment and order recording. It does not send you back to the operator&apos;s registered store website.</p>
+    <ol className="list-decimal space-y-2 pl-6">
+      <li>Keep the <code>receipt_url</code> and <code>receipt_json_url</code> returned with your preparation. They are also available from <code>get_card_order_preparation</code> after checkout while the link is unexpired.</li>
+      <li>Open <code>receipt_url</code> to see your order reference, card count and order status. Share this private link with your assistant to read without signing in.</li>
+      <li>An agent can GET <code>receipt_json_url</code>, or request <code>receipt_url</code> with <code>Accept: application/json</code>. No API key or login is required.</li>
+    </ol>
+    <p><code>state: pending</code> means confirmation has not been recorded yet. If you just paid, wait a few seconds and refresh; do not pay again. <code>state: confirmed</code> means the server recorded payment. A cancelled order is labelled <code>cancelled</code>; this page does not report refunds. Test deployments explicitly show <code>environment: test</code>.</p>
+    <p>The summary excludes your email, shipping address and payment credentials. Anyone with this private link can read that summary until the original cart <code>expires_at</code>, normally seven days after preparation. Keep it out of public chats. The page runs no analytics or scripts and is not cached or indexed.</p>
+
     <h2>Limits and private links</h2>
     <ul className="list-disc space-y-2 pl-6">
       <li>Maximum 1,000 total cards per order; standard stock and finish, with a finished size of 63 × 88 mm.</li>
       <li>Single-frame PNG or JPEG, up to 20 MiB and 40 million pixels per file. Files must be valid artwork; a webpage URL cannot be printed.</li>
-      <li>Preview, checkout, upload and preparation links/tokens are private. Anyone you share a preview link with can view that cart&apos;s artwork.</li>
+      <li>Preview, checkout, confirmation, upload and preparation links/tokens are private. Anyone you share a preview link with can view that cart&apos;s artwork.</li>
       <li>Preview image URLs last up to 15 minutes. Use <strong>Reload previews</strong> while the cart is open and unexpired. The returned <code>expires_at</code> tells you when the cart expires.</li>
       <li>Rate limits apply. Honor <code>Retry-After</code> or <code>retry_after_seconds</code>. After a temporary failure, retry the same request ID and artwork instead of creating duplicate preparations.</li>
     </ul>
