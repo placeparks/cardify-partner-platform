@@ -41,12 +41,14 @@ export const DEFAULT_CARD_BACK_PATH = "/partner-widget/default-card-back.jpg"
 export function validateCart(body: any, maxCards = 1000, defaultBackUrl?: string) {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new ApiError(400, "invalid_request", "Expected a JSON object")
   if (Object.hasOwn(body, "certification")) throw new ApiError(400, "invalid_request", "Remove certification. Accept partner terms once in the dashboard; the customer confirms image rights at checkout.")
-  const allowed = ["items", "back_image_url", "back_sha256", "card_stock", "external_ref", "return_url", "settlement", "retail_amount_cents"]
+  const allowed = ["items", "back_image_url", "back_sha256", "card_stock", "external_ref", "return_url", "settlement", "retail_amount_cents", "customer_payment_only"]
   if (Object.keys(body).some(key => !allowed.includes(key))) throw new ApiError(400, "invalid_request", "Unknown cart field")
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > maxCards) throw new ApiError(400, "invalid_request", `Submit 1–${maxCards} items`)
   // Thick stock remains unavailable until production confirms its specifications and rate.
   if (body.card_stock && body.card_stock !== "standard") throw new ApiError(400, "invalid_request", "Only standard card stock is currently supported")
   if (body.settlement !== undefined && !['hosted','prepaid','connect'].includes(body.settlement)) throw new ApiError(400, 'invalid_request', 'settlement must be hosted, prepaid or connect')
+  if (body.customer_payment_only !== undefined && typeof body.customer_payment_only !== 'boolean') throw new ApiError(400, 'invalid_request', 'customer_payment_only must be a boolean')
+  if (body.customer_payment_only === true && body.settlement && body.settlement !== 'hosted') throw new ApiError(400, 'invalid_request', 'Customer-paid carts require hosted checkout')
   if (body.settlement === 'connect') {
     if (!Number.isSafeInteger(body.retail_amount_cents) || body.retail_amount_cents < 50 || body.retail_amount_cents > 5000000) throw new ApiError(400,'invalid_request','Connect requires retail_amount_cents: the whole cart card-sale subtotal in USD cents (50–5000000), excluding shipping and tax.')
   } else if (body.retail_amount_cents !== undefined) throw new ApiError(400,'invalid_request','retail_amount_cents is only allowed with settlement: connect.')
@@ -66,6 +68,7 @@ export function validateCart(body: any, maxCards = 1000, defaultBackUrl?: string
   })
   if (body.external_ref !== undefined && (typeof body.external_ref !== "string" || body.external_ref.length > 200)) throw new ApiError(400, "invalid_request", "external_ref must be at most 200 characters")
   return { items, card_count: count, card_stock: "standard", external_ref: body.external_ref || null,
+    ...(body.customer_payment_only === true ? { customer_payment_only: true } : {}),
     ...(body.settlement !== undefined ? {settlement:body.settlement} : {}),
     ...(body.settlement === 'connect' ? {retail_amount_cents:body.retail_amount_cents} : {}),
     return_url: body.return_url ? httpsUrl(body.return_url, "return_url") : null,

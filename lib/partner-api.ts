@@ -59,6 +59,7 @@ export async function authenticate(request: Request, options: { polling?: boolea
 export function publicCart(cart: any) {
   const status = ["validating", "open"].includes(cart.status) && Date.parse(cart.expires_at) <= Date.now() ? "expired" : cart.status
   return { id: cart.id, status,
+    ...(cart.customer_payment_only === true ? { customer_payment_only: true } : {}),
     external_ref: cart.external_ref, card_count: cart.card_count, card_stock: cart.card_stock, affiliate_code: cart.affiliate_code,
     progress: { done: cart.validation_done || 0, total: cart.validation_total || 0 }, errors: cart.validation_errors || [], warnings: cart.artwork_warnings || [],
     partner_terms_version: cart.partner_terms_version || null,
