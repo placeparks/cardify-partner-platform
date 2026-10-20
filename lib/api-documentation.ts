@@ -225,6 +225,22 @@ export function buildLlmsText(config = documentationConfig()) {
 
 API base URL: ${config.baseUrl}
 API path version: /v1. OpenAPI document revision is not a new API path version.
+
+## Public MCP ordering (no customer account or API key)
+- [MCP setup and card previews](${config.baseUrl}/docs/mcp).
+- Remote MCP URL: https://tcgplaytest.com/api/mcp on the MAIN website, not the partner API origin. Transport: Streamable HTTP. Authentication: none. Do not ask the customer to apply for a partnership, create an API key or supply the operator's secrets.
+- Tools: get_card_printing_options; quote_card_order({quantity,country}); create_card_artwork_upload({content_type,size}); prepare_card_order({request_id,items:[{image_url,back_image_url?,quantity}]}); get_card_order_preparation({preparation_token}).
+- Use actual full-quality public HTTPS PNG/JPEG artwork URLs, or first PUT bytes to the upload tool's returned upload_url using its headers, then use image_url. Never send a webpage URL or payment details. Omitted backs use the standard TCGPlaytest back.
+- Maximum 1,000 total cards; standard stock/finish, finished size 63 x 88 mm. Each image is single-frame PNG/JPEG, at most 20 MiB and 40 million pixels.
+- Generate a fresh random UUID request_id per new preparation; keep it private and reuse it with identical inputs on retries. Poll with preparation_token at least five seconds apart; honor Retry-After/retry_after_seconds.
+- Only status open returns preview_url and checkout_url. Give preview_url to the customer first: it shows paired fronts/backs, quantities and low-resolution warnings, six designs per page. It needs no login. Continue to checkout opens the returned checkout URL.
+- Customers enter delivery details, confirm image rights and review the final price before paying. The tools cannot charge, spend partner printing credit, trigger printing without successful payment, read admin/customer records or earn partner Connect payouts.
+- Image links last up to 15 minutes, bounded by cart expiry. Reload previews refreshes them while the cart is open. The validated full-quality files remain the print source. Trim previews approximate the finished cut; final cutting/colors may vary.
+- Keep preparation/upload/preview/checkout capabilities private: anyone holding a preview link can see that cart's artwork. The site operator's partner key/signing secret are never shared with MCP customers.
+- HTTP GET in a browser returns 405 for the tool endpoint. 503 means disabled, unconfigured or unavailable; a customer key will not fix it. Browser MCP clients on another website may need that exact Origin allowed; server/desktop clients without Origin need no setting.
+- The REST API account/key requirements below apply to partner integrations, not public MCP guest ordering.
+
+## Partner REST API
 ${prepaidLlms}
 - Rate limits: ALL /v1/prepaid endpoints share the ${config.rateLimit} requests per API key per minute allowance with upload-grant POSTs, cart POSTs and order GETs. This includes quote creation, quote GET polling, reserve, release, prepaid order submission, balance/ledger reads and retries. Quote polling is NOT exempt; only authenticated cart-status GETs are exempt. Poll quotes every five seconds or slower, budget across concurrent orders, and honor Retry-After on HTTP 429. Preserve the original body and idempotency key when retrying mutations.
 
