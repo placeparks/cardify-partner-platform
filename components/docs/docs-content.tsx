@@ -54,7 +54,7 @@ if (!statusResponse.ok) throw new Error(status.error.message);
     { id:"overview", title:"Overview", group:"Get started", description:"Everything you need to turn artwork into printed cards.", keywords:"introduction getting started API base", content: (
 <DocsOverview baseUrl={config.baseUrl} />
     ) },
-    { id:"mcp", title:"Order with AI · MCP", group:"Get started", description:"Connect an AI assistant, preview your cards and check out without a TCGPlaytest account or customer API key.", keywords:"MCP model context protocol AI assistant remote streamable HTTP no login guest preview", content: <McpGuide /> },
+    { id:"mcp", title:"Order with AI · MCP", group:"Get started", description:"Connect ChatGPT, Claude, Gemini or your developer tools, preview your cards and check out without a TCGPlaytest account or customer API key.", keywords:"MCP model context protocol AI assistant remote streamable HTTP no login guest preview ChatGPT OpenAI Claude Gemini Codex Cursor connector setup", content: <McpGuide /> },
     { id:"before-you-start", title:"Quickstart & authentication", group:"Get started", description:"Set up your account, protect your API key and make your first integration.", keywords:"Google auth bearer token secret website application account", content: (
     <section id="before-you-start" className="scroll-mt-24 space-y-3 rounded border border-emerald-300/20 p-4 sm:p-6">
       <h2 className="text-2xl font-bold">Before you start</h2>

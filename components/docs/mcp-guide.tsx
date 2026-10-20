@@ -1,6 +1,6 @@
 import { CodeExample } from './code-example'
 
-const endpoint = 'https://tcgplaytest.com/api/mcp'
+const endpoint = 'https://www.tcgplaytest.com/api/mcp'
 
 export function McpGuide() {
   return <section className="space-y-4">
@@ -13,10 +13,83 @@ export function McpGuide() {
       <li>Choose <strong>No authentication</strong>. Leave the API key and Authorization header empty.</li>
     </ol>
     <p>Your assistant&apos;s own account or plan may affect whether it supports custom MCP servers. Opening the endpoint in a browser returns HTTP 405 because it is a tool endpoint, not a webpage.</p>
-    <CodeExample label="Remote MCP configuration">{JSON.stringify({ mcpServers: { tcgplaytest: { url: endpoint } } }, null, 2)}</CodeExample>
-    <p>Use your client&apos;s remote-server settings if its configuration format differs from this example.</p>
+    <CodeExample label="MCP server URL">{endpoint}</CodeExample>
+    <p>Use the <strong>www</strong> URL above directly; some clients do not follow redirects from the non-www address. Your AI provider&apos;s account, plan and usage charges are separate from TCGPlaytest checkout.</p>
 
-    <h2>Prepare, preview and check out</h2>
+    <h2 id="mcp--platforms">Choose your platform</h2>
+    <p>Setup steps checked against official platform documentation on October 20, 2026. Menus and availability can vary by account or workspace policy.</p>
+    <nav aria-label="MCP platform setup" className="flex flex-wrap gap-x-5 gap-y-2">
+      <a href="#mcp--chatgpt">ChatGPT</a><a href="#mcp--claude">Claude</a><a href="#mcp--gemini">Gemini</a><a href="#mcp--codex">Codex</a><a href="#mcp--claude-code">Claude Code</a><a href="#mcp--gemini-cli">Gemini CLI</a><a href="#mcp--cursor">Cursor</a><a href="#mcp--openai-api">OpenAI API</a><a href="#mcp--first-order">Try your first order</a>
+    </nav>
+
+    <h3 id="mcp--chatgpt">ChatGPT</h3>
+    <ol className="list-decimal space-y-2 pl-6">
+      <li>Open ChatGPT&apos;s <strong>Plugins</strong> page, select <strong>+</strong>, then <strong>Add custom MCP server</strong>.</li>
+      <li>Name it <strong>TCGPlaytest</strong>. Describe it as “Card printing estimates, artwork previews and guest checkout.” Choose the public URL connection and paste the server URL above.</li>
+      <li>Select no authentication, review the connection notice, then choose <strong>Create as a plugin</strong>.</li>
+      <li>Install the resulting plugin. Start a conversation, type <strong>@</strong> and select TCGPlaytest before requesting an estimate.</li>
+    </ol>
+    <p>If custom servers are unavailable, check your account or workspace policy. Follow <a href="https://developers.openai.com/plugins/deploy/connect-chatgpt">OpenAI&apos;s current connection guide</a> for your interface. Creating this personal connection does not publish TCGPlaytest in the plugin directory.</p>
+
+    <h3 id="mcp--claude">Claude · web and desktop</h3>
+    <ol className="list-decimal space-y-2 pl-6">
+      <li>Open <strong>Customize → Connectors → + Add → Add custom connector</strong>.</li>
+      <li>Use the name <strong>TCGPlaytest</strong>, paste the server URL above and continue.</li>
+      <li>Review the detected settings, choose <strong>No sign in</strong> and leave request headers empty. Finish with <strong>Add</strong>.</li>
+      <li>In a conversation, open <strong>+ → Connectors</strong> and enable TCGPlaytest.</li>
+    </ol>
+    <p>On Team or Enterprise, an authorized owner first adds it under <strong>Organization settings → Connectors → Add → Custom → Web</strong>; members then enable it. Remote connectors connect from Anthropic&apos;s cloud, including when used in Claude Desktop. See the <a href="https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp">official Claude connector guide</a>.</p>
+
+    <h3 id="mcp--gemini">Gemini · web and mobile</h3>
+    <ol className="list-decimal space-y-2 pl-6">
+      <li>On a computer, open Gemini&apos;s <strong>Settings → Connected Apps</strong>. Some accounts show this inside <strong>Personal Intelligence</strong>.</li>
+      <li>Under <strong>Custom apps</strong>, add the server URL above, choose <strong>Next</strong> and follow the connection prompts.</li>
+      <li>Once connected, type <strong>@</strong> and select the custom app in a chat. The connection can also be used on mobile.</li>
+    </ol>
+    <p>Google currently limits this feature to English, personal accounts in the US, users aged 18 or over, and accounts with Keep Activity enabled. TCGPlaytest provides no OAuth credentials; if your connection flow requires them or Custom apps is unavailable, use <a href="#mcp--gemini-cli">Gemini CLI</a>. See <a href="https://support.google.com/gemini/answer/17209137?hl=en">Google&apos;s custom app instructions and eligibility</a>.</p>
+
+    <h3 id="mcp--codex">OpenAI Codex</h3>
+    <p>With Codex CLI installed, run:</p>
+    <CodeExample label="Codex CLI">{`codex mcp add tcgplaytest --url ${endpoint}
+codex mcp list`}</CodeExample>
+    <p>Start a new Codex session and use <code>/mcp</code> to check tools. Alternatively, merge this into your user <code>~/.codex/config.toml</code>, preserving other settings, then restart your session:</p>
+    <CodeExample label="Codex config.toml">{`[mcp_servers.tcgplaytest]
+url = "${endpoint}"`}</CodeExample>
+    <p>No bearer token or MCP login is needed. In the IDE extension you can also use <strong>MCP servers → Add server → Streamable HTTP</strong>. See <a href="https://learn.chatgpt.com/docs/extend/mcp">OpenAI&apos;s MCP configuration guide</a>.</p>
+
+    <h3 id="mcp--claude-code">Claude Code</h3>
+    <p>With Claude Code installed, add the server to your user configuration:</p>
+    <CodeExample label="Claude Code CLI">{`claude mcp add --transport http --scope user tcgplaytest ${endpoint}
+claude mcp list`}</CodeExample>
+    <p>Open a new session and run <code>/mcp</code> to check the connection. No token or OAuth login is required. See the <a href="https://code.claude.com/docs/en/mcp">Claude Code MCP guide</a>.</p>
+
+    <h3 id="mcp--gemini-cli">Gemini CLI</h3>
+    <p>With Gemini CLI installed and signed in to your chosen model provider, run:</p>
+    <CodeExample label="Gemini CLI">{`gemini mcp add --transport http --scope user tcgplaytest ${endpoint}
+gemini mcp list`}</CodeExample>
+    <p>Alternatively, merge this entry into <code>~/.gemini/settings.json</code>, preserving other servers. Gemini CLI uses <code>httpUrl</code> for Streamable HTTP:</p>
+    <CodeExample label="Gemini settings.json">{JSON.stringify({ mcpServers: { tcgplaytest: { httpUrl: endpoint } } }, null, 2)}</CodeExample>
+    <p>Start a new session, check <code>/mcp list</code>, then request a quote. See the <a href="https://geminicli.com/docs/tools/mcp-server/">Gemini CLI MCP guide</a>.</p>
+
+    <h3 id="mcp--cursor">Cursor</h3>
+    <p>Add this entry to <code>.cursor/mcp.json</code> in your project, or <code>~/.cursor/mcp.json</code> for all projects. Merge it with existing servers:</p>
+    <CodeExample label="Cursor mcp.json">{JSON.stringify({ mcpServers: { tcgplaytest: { url: endpoint } } }, null, 2)}</CodeExample>
+    <p>Restart Cursor, check that TCGPlaytest is enabled under <strong>Customize → MCPs</strong>, and ask Agent for an estimate. Review tool approval prompts as they appear. See <a href="https://cursor.com/help/customization/mcp">Cursor&apos;s MCP setup guide</a>.</p>
+
+    <h3 id="mcp--openai-api">OpenAI Responses API · for developers</h3>
+    <p>Add this object to the <code>tools</code> array of a Responses API request using an MCP-capable model. Your application uses its own OpenAI API credential; the TCGPlaytest connection needs no authorization value.</p>
+    <CodeExample label="OpenAI Responses API · MCP tool">{JSON.stringify({
+      type: 'mcp',
+      server_label: 'tcgplaytest',
+      server_url: endpoint,
+      require_approval: 'always',
+    }, null, 2)}</CodeExample>
+    <p>Your application must handle <code>mcp_approval_request</code> items and submit an <code>mcp_approval_response</code> after the user decides. An approval request is not a completed tool call. Start with the estimate prompt below. See <a href="https://developers.openai.com/api/docs/guides/tools-connectors-mcp">OpenAI&apos;s remote MCP and approval examples</a>.</p>
+
+    <h2 id="mcp--first-order">Try it: estimate, preview and check out</h2>
+    <p>First confirm the connection without uploading or creating an order:</p>
+    <blockquote>Use TCGPlaytest to show the available card printing options and estimate 2 standard cards shipped to the US. Do not prepare an order yet.</blockquote>
+    <p>You should see calls to <code>get_card_printing_options</code> and <code>quote_card_order</code>. Once those work, provide your artwork and ask:</p>
     <blockquote>Print 70 copies of this card with this back, shipping to the US. Show me the estimate and a preview before checkout.</blockquote>
     <ol className="list-decimal space-y-2 pl-6">
       <li>Supply the finished front artwork, optional back artwork and quantity. Use PNG or JPEG files. An assistant that can upload files may request temporary upload links; otherwise provide public HTTPS image URLs.</li>
@@ -27,6 +100,7 @@ export function McpGuide() {
     </ol>
     <p>The preview works in your browser without login, even if your assistant cannot display images inside the chat. It uses your validated artwork and preserves the full-quality printing files. Trim previews hide the prepared 2 mm bleed; final cutting and printed colors can vary slightly. Older files without prepared bleed are shown as full artwork.</p>
     <p>To change an image or quantity, ask your assistant to prepare an updated order. Previewing does not charge you. The assistant cannot pay for an order or collect card payment details through these tools.</p>
+    <p><strong>Using a chat attachment?</strong> Attaching an image does not automatically give the MCP server its bytes. Your client needs a file-upload capability to PUT them to the temporary upload URL. If it cannot do that, provide direct public HTTPS PNG/JPEG URLs instead. A local file path, a sharing webpage or a made-up image URL will not work.</p>
 
     <h2>Available tools</h2>
     <ul className="space-y-3">
@@ -55,5 +129,6 @@ export function McpGuide() {
     <p>No TCGPlaytest server secret belongs in an MCP client. The operator&apos;s partner API key and signing secret stay on TCGPlaytest&apos;s servers. A browser-based client on another website may need its exact origin allowed by TCGPlaytest; desktop/server clients sending no Origin header do not need that setting.</p>
     <h2>If you cannot connect</h2>
     <p>Check the full server URL and the remote HTTP transport. A 503 response means the service is disabled, not configured or temporarily unavailable; it does not mean you need to create a customer key. Contact <a href="https://www.tcgplaytest.com/support">support</a> if it continues. For invalid artwork, replace the affected file and prepare an updated order.</p>
+    <p>If no tools appear, enable the connection and start a new conversation. Use the platform-specific configuration above: Gemini CLI&apos;s <code>httpUrl</code>, Cursor&apos;s <code>url</code> and Codex&apos;s TOML format are different. For a 403, contact support with the platform name; an operator may need to allow its exact browser origin. Keep API keys and private preparation links out of support screenshots.</p>
   </section>
 }
