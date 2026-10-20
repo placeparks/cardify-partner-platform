@@ -47,6 +47,7 @@ export async function POST(request: Request) { return api(async () => {
   const retentionDays = Number(process.env.PARTNER_ARTWORK_RETENTION_DAYS || 30)
   if (!Number.isInteger(expiryHours) || expiryHours < 1 || expiryHours > 168 || !Number.isInteger(retentionDays) || retentionDays < 0 || retentionDays > 365) throw new ApiError(503, "configuration_error", "Artwork retention configuration is invalid")
   const cart = { id, partner_id: key.partner_id, api_key_id: key.id, mode: key.mode, status: "validating", external_ref: body.external_ref,
+    ...(body.customer_payment_only === true ? { customer_payment_only: true } : {}),
     settlement: body.settlement === 'connect' ? 'hosted' : body.settlement || 'hosted',
     connect_retail_cents: connect ? body.retail_amount_cents : null, connect_account_id: connect?.stripe_account_id || null, connect_payment_mode: connect ? connectMode() : null,
     card_count: body.card_count, card_stock: body.card_stock, affiliate_code: ['prepaid','connect'].includes(body.settlement) ? null : key.partner.checkout_affiliate_code || null, return_url: returnUrl,
