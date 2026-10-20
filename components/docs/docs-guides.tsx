@@ -8,7 +8,7 @@ export function DocsOverview({ baseUrl }: { baseUrl: string }) {
       <span className={styles.eyebrow}>TCGPlaytest for developers</span>
       <h1>Your card experience.<br /><span>Our printing API.</span></h1>
       <p>Turn finished artwork into cards delivered to your customers. Build on your own website. We handle artwork validation, printing and shipping.</p>
-      <div className={styles.heroLinks}><a href="/docs/before-you-start">Start building <ArrowRight size={15} /></a><a href="/docs/create-cart">Explore the API <ArrowRight size={14} /></a></div>
+      <div className={styles.heroLinks}><a href="/docs/before-you-start">Start building <ArrowRight size={15} /></a><a href="/docs/create-cart">Explore the API <ArrowRight size={14} /></a><a href="/docs/mcp">Order with AI · MCP <ArrowRight size={14} /></a></div>
     </div>
     <h2>From artwork to checkout</h2>
     <div className={styles.quickGrid}>
@@ -37,7 +37,7 @@ export function DocsOverview({ baseUrl }: { baseUrl: string }) {
       <a href="/docs/branding"><Palette size={22} /><strong>Make checkout yours <ArrowRight size={15} /></strong><p>Add your logo, colors and welcome message. Bring customers back to your website.</p></a>
       <a href="/docs/prepaid"><CreditCard size={22} /><strong>Pay with printing credit <ArrowRight size={15} /></strong><p>Fund printing from your balance. Customers pay shipping and fulfillment tax through Stripe.</p></a>
     </div>
-    <div className={styles.callout}><ShieldCheck size={19} /><p><strong>Your key stays on your server.</strong> The API uses bearer authentication. The standalone widget uses a public partner identifier and does not need your secret key.</p></div>
+    <div className={styles.callout}><ShieldCheck size={19} /><p><strong>Your key stays on your server.</strong> The REST API uses bearer authentication. The standalone widget uses a public partner identifier and does not need your secret key. For guest ordering through an AI assistant, the <a href="/docs/mcp">public MCP server</a> needs no customer account or API key and includes a private card preview before checkout.</p></div>
     <h2 id="api-base">One API. Your own storefront.</h2>
     <div className={styles.endpoint}><span>BASE URL</span><code>{baseUrl}</code></div>
     <p>This is the public partner API. Use the keys issued by your partner dashboard. Checkout may run on a different origin; pass the returned open cart to <code>TCGPlaytest.checkout(cart)</code>. Never construct checkout tokens or URLs yourself.</p>

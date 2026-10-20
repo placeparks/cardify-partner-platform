@@ -5,6 +5,7 @@ import { DocsOverview, GoLiveGuide } from '@/components/docs/docs-guides'
 import styles from '@/components/docs/docs.module.css'
 import Link from "next/link"
 import { ConnectGuide } from '@/components/docs/connect-guide'
+import { McpGuide } from '@/components/docs/mcp-guide'
 import { PrepaidGuide } from '@/components/prepaid-guide'
 import { createCartExample, documentationConfig, documentationExamples, validationErrors } from "@/lib/api-documentation"
 import { CUSTOMER_RIGHTS_STATEMENT } from "@/lib/manufacturing-contract"
@@ -53,10 +54,11 @@ if (!statusResponse.ok) throw new Error(status.error.message);
     { id:"overview", title:"Overview", group:"Get started", description:"Everything you need to turn artwork into printed cards.", keywords:"introduction getting started API base", content: (
 <DocsOverview baseUrl={config.baseUrl} />
     ) },
+    { id:"mcp", title:"Order with AI · MCP", group:"Get started", description:"Connect an AI assistant, preview your cards and check out without a TCGPlaytest account or customer API key.", keywords:"MCP model context protocol AI assistant remote streamable HTTP no login guest preview", content: <McpGuide /> },
     { id:"before-you-start", title:"Quickstart & authentication", group:"Get started", description:"Set up your account, protect your API key and make your first integration.", keywords:"Google auth bearer token secret website application account", content: (
     <section id="before-you-start" className="scroll-mt-24 space-y-3 rounded border border-emerald-300/20 p-4 sm:p-6">
       <h2 className="text-2xl font-bold">Before you start</h2>
-      <p>A person completes these account steps before an agent or server can use the API:</p>
+      <p>For the partner REST API and widget, complete these account steps. To place a guest order through an AI assistant without a partner account, use the <Link href="/docs/mcp" className="underline">public MCP server</Link>.</p>
       <ol className="list-decimal space-y-2 pl-6">
         <li>Sign in with Google and complete the <Link href="/partnership" className="underline">partner application</Link>, including the HTTPS website where your integration runs. Completed new applications activate automatically; access can later be revoked.</li>
         <li>In the <Link href="/dashboard" className="underline">dashboard</Link>, accept the current <strong>Partner terms</strong>. Acceptance is once per version.</li>
