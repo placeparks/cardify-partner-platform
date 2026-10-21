@@ -1,3 +1,4 @@
+import { isMcpCart } from '@/lib/mcp-receipt'
 import { NextResponse } from "next/server"
 import { api, checked, digest, internalAuth, json } from "@/lib/partner-api"
 import { ApiError, CUSTOMER_TERMS_VERSION } from "@/lib/manufacturing-contract"
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
   try { partnerWebsite = partnerReturnUrl(undefined, cart.partner.website_url) } catch {}
   reason = 'checkout_response_failed'
   // The commerce app receives counts and validated branding, never artwork credentials.
-  return NextResponse.json({ id: cart.id, card_count: cart.card_count, affiliate_code: cart.affiliate_code, external_ref: cart.external_ref,
+  return NextResponse.json({ id: cart.id, pricing_channel: isMcpCart(cart) ? 'mcp' : 'partner', card_count: cart.card_count, affiliate_code: cart.affiliate_code, external_ref: cart.external_ref,
     connect_retail_cents: cart.connect_retail_cents ?? null, connect_payment_mode: cart.connect_payment_mode ?? null,
     expires_at: cart.expires_at, partner_id: cart.partner_id, warnings: cart.artwork_warnings || [],
     branding: checkoutBranding(cart.partner.checkout_branding), partner_website: partnerWebsite,
