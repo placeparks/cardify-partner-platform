@@ -50,13 +50,30 @@ export async function POST(request: Request) {
   if (Date.parse(cart.expires_at) <= Date.now()) unavailable('cart_expired')
   if (cart.status !== 'open') unavailable('cart_not_open')
   reason = 'artwork_lookup_failed'
-  const files = checkedCheckout(await db.from("partner_artwork").select("item_index,side,quantity,state,expected_sha256,actual_sha256,storage_path,print_sha256").eq("cart_id",cart.id).order("item_index")) || []
-  const hashes = files.flatMap((f:any)=>[f.actual_sha256,f.expected_sha256,f.print_sha256]).filter(Boolean)
+  if (!Number.isSafeInteger(cart.card_count) || cart.card_count < 1) unavailable('cart_quantity_invalid')
+  const files: any[] = []
+  // Read all designs below PostgREST's row cap, including large MCP orders.
+  for (let offset = 0; offset < cart.card_count * 2; offset += 500) {
+    const batch = checkedCheckout(await db.from("partner_artwork").select("item_index,side,quantity,state,expected_sha256,actual_sha256,storage_path,print_sha256")
+      .eq("cart_id",cart.id).order("item_index").order("side").range(offset, Math.min(offset + 499, cart.card_count * 2 - 1))) || []
+    files.push(...batch)
+    if (batch.length < 500) break
+  }
+  const hashes = Array.from(new Set<string>(files.flatMap((f:any)=>[f.actual_sha256,f.expected_sha256,f.print_sha256]).filter(Boolean)))
   reason = 'content_block_lookup_failed'
-  const blocks = hashes.length ? checkedCheckout(await db.from("partner_content_blocks").select("sha256").in("sha256",hashes)) || [] : []
+  const blocks: any[] = []
+  // Keep URL-encoded hash filters small even when an order has many designs.
+  for (let offset = 0; offset < hashes.length; offset += 50) {
+    blocks.push(...(checkedCheckout(await db.from("partner_content_blocks").select("sha256").in("sha256",hashes.slice(offset, offset + 50))) || []))
+  }
   if (files.some((f:any)=>f.state === "blocked") || blocks.length) fail(403,"content_blocked","Artwork is blocked",'content_blocked')
   if (!files.length) fail(409,"artwork_not_ready","Artwork has not passed validation",'artwork_missing')
   if (files.some((f:any)=>f.state !== "stored" || !f.storage_path)) fail(409,"artwork_not_ready","Artwork has not passed validation",'artwork_not_ready')
+  const fronts = files.filter((f:any)=>f.side === "front")
+  if (fronts.some((f:any)=>!Number.isSafeInteger(f.quantity) || f.quantity < 1)
+    || fronts.reduce((sum:number,f:any)=>sum+f.quantity,0) !== cart.card_count) {
+    fail(409,"artwork_not_ready","Artwork quantities do not match this cart",'artwork_quantity_mismatch')
+  }
   let acceptance = null
   if (body.acceptance !== undefined) {
     // Preserve the exact version for checkout pages already open during rollout.
