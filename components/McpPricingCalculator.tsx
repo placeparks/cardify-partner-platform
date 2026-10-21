@@ -1,7 +1,7 @@
 'use client'
 
 import { useId, useState } from 'react'
-import { mcpQuote } from '../utils/mcpPricing'
+import { MCP_MAX_CARDS, MCP_SHIPPING_TIERS, mcpQuote } from '../utils/mcpPricing'
 import styles from './McpPricingCalculator.module.css'
 
 const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
@@ -19,8 +19,8 @@ export default function McpPricingCalculator() {
   const sheet = quote ? Math.min(selectedSheet ?? quote.sheets, quote.sheets) : 1
   const filled = quote ? Math.min(18, quantity - (sheet - 1) * 18) : 0
   const nextRate = quantity < 18 ? 0 : quantity < 180 ? 35 : quantity < 504 ? 30 : 26
-  const nextShipping = [101, 251, 501].find(boundary => boundary > quantity)
-  const bandLabel = quantity <= 100 ? '1–100' : quantity <= 250 ? '101–250' : quantity <= 500 ? '251–500' : '501+'
+  const nextShipping = quote?.shipping_band.next_increase_at
+  const bandLabel = quote ? `${quote.shipping_band.from.toLocaleString()}–${quote.shipping_band.through.toLocaleString()}` : ''
   function change(value: string) { setInput(value); setSelectedSheet(null) }
 
   return <section className={styles.calculator} aria-label="MCP price calculator">
@@ -32,11 +32,11 @@ export default function McpPricingCalculator() {
         </label>)}</fieldset>
         <label className={styles.quantityLabel} htmlFor={`${id}-quantity`}>Cards in the order</label>
         <div className={styles.quantity}>
-          <input aria-label="Adjust card quantity" type="range" min="1" max={quote ? Math.max(1008, quantity) : 1008} value={quote ? quantity : 1} onChange={e => change(e.target.value)} />
-          <input id={`${id}-quantity`} aria-describedby={`${id}-hint`} aria-invalid={!quote} type="number" min="1" step="1" value={input} onChange={e => change(e.target.value)} />
+          <input aria-label="Adjust card quantity" type="range" min="1" max={MCP_MAX_CARDS} value={quote ? quantity : 1} onChange={e => change(e.target.value)} />
+          <input id={`${id}-quantity`} aria-describedby={`${id}-hint`} aria-invalid={!quote} type="number" min="1" max={MCP_MAX_CARDS} step="1" value={input} onChange={e => change(e.target.value)} />
         </div>
-        <p id={`${id}-hint`} className={styles.hint}>No fixed card-count cap. Type a larger quantity to extend the slider.</p>
-        {!quote && <p role="alert">Enter a positive whole number within supported numeric precision.</p>}
+        <p id={`${id}-hint`} className={styles.hint}>Maximum 10,080 cards (560 sheets) per MCP order.</p>
+        {!quote && <p role="alert">Enter a whole number from 1 to 10,080 cards.</p>}
         {quote && <>
           <div className={styles.total} aria-live="polite" aria-atomic="true"><strong>{money(quote.estimated_total_before_tax_cents)}</strong><span>Order total with {destination === 'Worldwide' ? 'international' : destination} shipping, before tax and discounts</span></div>
           <dl className={styles.breakdown}>
@@ -47,7 +47,7 @@ export default function McpPricingCalculator() {
             <div><dt>Shipping · {destination}, {bandLabel} cards</dt><dd>{money(quote.shipping_cents)}</dd></div>
             <div><dt>Average per card, excluding shipping</dt><dd>{money(quote.average_card_price_cents)}</dd></div>
           </dl>
-          <p className={styles.nudge}>{quote.savings_message || `The next card adds ${nextRate}¢.${nextShipping ? ` Shipping steps up at ${nextShipping} cards.` : ''}`}</p>
+          <p className={styles.nudge}>{quantity === MCP_MAX_CARDS ? 'Maximum order: 10,080 cards (560 sheets).' : quote.savings_message || `The next card adds ${nextRate}¢.${nextShipping ? ` Shipping steps up at ${nextShipping.toLocaleString()} cards.` : ''}`}</p>
         </>}
       </div>
       {quote && <div className={styles.sheetPanel}>
@@ -61,10 +61,21 @@ export default function McpPricingCalculator() {
         <p className={styles.sheetCaption}>{filled} of 18 card spaces filled</p>
       </div>}
     </div>
+    <details className={styles.shippingTable}>
+      <summary>View all MCP shipping rates</summary>
+      <div><table>
+        <caption>Shipping in USD · ordinary website and widget rates are separate</caption>
+        <thead><tr><th scope="col">Cards</th><th scope="col">US</th><th scope="col">Canada</th><th scope="col">Worldwide</th></tr></thead>
+        <tbody>{MCP_SHIPPING_TIERS.map((tier, index) => <tr key={tier.through}>
+          <th scope="row">{(index ? MCP_SHIPPING_TIERS[index - 1].through + 1 : 1).toLocaleString()}–{tier.through.toLocaleString()}</th>
+          <td>{money(tier.US)}</td><td>{money(tier.CA)}</td><td>{money(tier.INTL)}</td>
+        </tr>)}</tbody>
+      </table></div>
+    </details>
     <div className={styles.notes}>
       <p>Cards will be delivered cut to standard trading card size with rounded corners</p>
       <p>Price is set based on demand, shipping rates, and material availability/cost</p>
-      <p>Cards 505 onward, including above 1,008, add 26¢ each. Only requested copies are printed. Discounts cannot reduce the card price below $34.95. Worldwide means supported shipping countries; final tax and total are confirmed at checkout.</p>
+      <p>Cards 505–10,080 add 26¢ each. Only requested copies are printed. Discounts cannot reduce the card price below $34.95. Worldwide means supported shipping countries; final tax and total are confirmed at checkout.</p>
     </div>
   </section>
 }

@@ -37,3 +37,12 @@
 .notes { border-top: 1px solid #29445e; margin-top: 24px; padding-top: 14px; }
 .calculator .notes p { color: #b7c9de; font-size: 12px; line-height: 1.65; margin: 8px 0; }
 @media (max-width: 650px) { .layout { grid-template-columns: minmax(0, 1fr); } .sheetPanel { width: 100%; max-width: 300px; margin: 0 auto; } }
+
+.shippingTable { margin-top: 24px; color: #b7c9de; font-size: 12px; }
+.shippingTable summary { color: #fff; cursor: pointer; font-weight: 700; padding: 10px 0; }
+.shippingTable > div { overflow-x: auto; }
+.shippingTable table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.shippingTable caption { text-align: left; padding: 8px 0; font-size: 11px; }
+.shippingTable th, .shippingTable td { padding: 9px; border-bottom: 1px solid #29445e; text-align: right; white-space: nowrap; }
+.shippingTable th:first-child { text-align: left; }
+.shippingTable p { line-height: 1.6; }
