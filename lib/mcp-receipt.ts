@@ -1,3 +1,4 @@
+import { MCP_MAX_CARDS } from "../utils/mcpPricing"
 import { createHash } from "node:crypto"
 import { ApiError } from "./manufacturing-contract"
 
@@ -9,9 +10,9 @@ export function isMcpCart(cart: any) {
     && cart.mode === "live" && cart.settlement === "hosted" && !cart.connect_account_id
 }
 
-// A null limit is reserved for the authenticated MCP cart classification.
+// Only the authenticated MCP cart classification receives the higher limit.
 export function cartCardLimit(cart: any, partnerLimit = 1000): number | null {
-  return isMcpCart(cart) ? null : partnerLimit
+  return isMcpCart(cart) ? MCP_MAX_CARDS : partnerLimit
 }
 
 export function mcpReceiptUrl(cart: any): string | undefined {
