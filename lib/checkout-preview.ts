@@ -1,3 +1,4 @@
+import { isMcpCart } from './mcp-receipt'
 import { createHash } from "node:crypto"
 import { ApiError } from "./manufacturing-contract"
 
@@ -16,7 +17,7 @@ export async function checkoutPreview(db: any, body: any, now = Date.now()) {
     throw new ApiError(400, "invalid_request", "Valid preview token and page required")
   }
   const cart = checked(await db.from("partner_carts")
-    .select("id,mode,status,settlement,expires_at,card_count,artwork_warnings,partner:partnership_requests(status,api_blocked_at)")
+    .select("id,mode,status,settlement,customer_payment_only,idempotency_key,connect_account_id,expires_at,card_count,artwork_warnings,partner:partnership_requests(status,api_blocked_at)")
     .eq("checkout_token_hash", createHash("sha256").update(body.token).digest("hex")).maybeSingle())
   if (!cart || !/^cart_[a-f0-9]{64}$/.test(cart.id) || cart.mode !== "live"
     || cart.status !== "open" || cart.settlement === "prepaid"
@@ -79,7 +80,7 @@ export async function checkoutPreview(db: any, body: any, now = Date.now()) {
     return { url, trimmed: !!file.print_storage_path }
   }
   return {
-    card_count: cart.card_count, design_count: all.length, page, pages,
+    card_count: cart.card_count, pricing_channel: isMcpCart(cart) ? 'mcp' : 'partner', design_count: all.length, page, pages,
     expires_at: cart.expires_at,
     images_expire_at: new Date(now + ttl * 1000).toISOString(),
     items: selected.map(d => ({ item_index: d.item_index, quantity: d.quantity, front: side(d.front), back: side(d.back),

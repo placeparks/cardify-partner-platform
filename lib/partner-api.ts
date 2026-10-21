@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { getSignedInUser, isPartnershipAdmin } from "@/lib/partnership"
 import { ApiError, hasPartnerTerms } from "@/lib/manufacturing-contract"
-import { mcpReceiptUrl } from "@/lib/mcp-receipt"
+import { isMcpCart, mcpReceiptUrl } from "@/lib/mcp-receipt"
 
 export const digest = (value: string | Buffer) => createHash("sha256").update(value).digest("hex")
 export const secret = (prefix: string) => `${prefix}${randomBytes(32).toString("hex")}`
@@ -60,7 +60,7 @@ export async function authenticate(request: Request, options: { polling?: boolea
 export function publicCart(cart: any) {
   const status = ["validating", "open"].includes(cart.status) && Date.parse(cart.expires_at) <= Date.now() ? "expired" : cart.status
   const receipt = ["open", "converted", "cancelled"].includes(status) && Date.parse(cart.expires_at) > Date.now() ? mcpReceiptUrl(cart) : undefined
-  return { id: cart.id, status,
+  return { id: cart.id, status, pricing_channel: isMcpCart(cart) ? 'mcp' : 'partner',
     ...(receipt ? { receipt_url: receipt } : {}),
     ...(cart.customer_payment_only === true ? { customer_payment_only: true } : {}),
     external_ref: cart.external_ref, card_count: cart.card_count, card_stock: cart.card_stock, affiliate_code: cart.affiliate_code,
