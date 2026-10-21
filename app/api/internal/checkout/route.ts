@@ -1,4 +1,4 @@
-import { isMcpCart } from '@/lib/mcp-receipt'
+import { isMcpCart, cartCardLimit } from '@/lib/mcp-receipt'
 import { NextResponse } from "next/server"
 import { api, checked, digest, internalAuth, json } from "@/lib/partner-api"
 import { ApiError, CUSTOMER_TERMS_VERSION } from "@/lib/manufacturing-contract"
@@ -51,6 +51,7 @@ export async function POST(request: Request) {
   if (cart.status !== 'open') unavailable('cart_not_open')
   reason = 'artwork_lookup_failed'
   if (!Number.isSafeInteger(cart.card_count) || cart.card_count < 1) unavailable('cart_quantity_invalid')
+  if (isMcpCart(cart) && cart.card_count > cartCardLimit(cart)!) unavailable('cart_quantity_invalid')
   const files: any[] = []
   // Read all designs below PostgREST's row cap, including large MCP orders.
   for (let offset = 0; offset < cart.card_count * 2; offset += 500) {
