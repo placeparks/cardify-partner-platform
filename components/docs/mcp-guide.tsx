@@ -102,6 +102,16 @@ gemini mcp list`}</CodeExample>
     <p>To change an image or quantity, ask your assistant to prepare an updated order. Previewing does not charge you. The assistant cannot pay for an order or collect card payment details through these tools.</p>
     <p><strong>Using a chat attachment?</strong> Attaching an image does not automatically give the MCP server its bytes. Your client needs a file-upload capability to PUT them to the temporary upload URL. If it cannot do that, provide direct public HTTPS PNG/JPEG URLs instead. A local file path, a sharing webpage or a made-up image URL will not work.</p>
 
+    <h2 id="mcp--pricing">MCP sheet pricing</h2>
+    <p>MCP orders have a <strong>$34.95 card minimum</strong>. Cards are priced in sheets of 18, rounding up, with a 10% markup on the base rates: $0.35 through 144 billable cards, $0.30 through 500 and $0.26 through 1,000. The last sheet is capped at 1,000 billable cards. Only your requested quantity is printed.</p>
+    <p>Prices never decrease when you add cards: totals hold at the preceding sheet price when a rate drops. US shipping is <strong>$6.95</strong>, so <strong>1–90 cards cost $41.90 before tax</strong>. Other countries use their existing quantity-based shipping rates.</p>
+    <div className="overflow-x-auto"><table><caption>MCP examples before discounts and tax</caption><thead><tr><th>Cards</th><th>Sheets</th><th>Card price</th><th>With US shipping</th></tr></thead><tbody>
+      {[[1, 1, '34.95', '41.90'], [90, 5, '34.95', '41.90'], [108, 6, '41.58', '48.53'], [144, 8, '55.44', '62.39'], [162, 9, '55.44', '62.39'], [250, 14, '83.16', '90.11'], [504, 28, '160.38', '167.33'], [1000, 56, '286.00', '292.95']].map(([cards, sheets, price, total]) => <tr key={cards}><td>{cards}</td><td>{sheets}</td><td>${price}</td><td>${total}</td></tr>)}
+    </tbody></table></div>
+    <p><strong>Ordering just one card?</strong> You can add 17 more to fill the first sheet, and the minimum covers up to 90 cards total. Your assistant should tell you: “You can still order 89 more cards for no extra printing charge (90 cards total).” It must ask before increasing your quantity. International shipping and tax may change; compare the updated quote.</p>
+    <p>Quotes return <code>savings_message</code>, <code>extra_cards_at_same_printing_price</code> and the destination-aware <code>extra_cards_at_same_total_before_tax</code>. Average card price is informational. Preview and checkout show the same pricing. To change quantities, prepare a new order and review its quote.</p>
+    <p>Discounts cannot reduce the card subtotal below the greater of $34.95 or $0.26 per billable card. Extra-card allowances are before discounts. MCP requires customer payment and cannot spend PRINTS or partner credit. Website, partner API, widget, prepaid and Connect pricing keep their separate rules.</p>
+
     <h2>Available tools</h2>
     <ul className="space-y-3">
       <li><code>get_card_printing_options</code> — supported stock, finish, destinations and artwork limits.</li>
