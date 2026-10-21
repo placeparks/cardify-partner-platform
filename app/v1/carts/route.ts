@@ -1,3 +1,4 @@
+import { cartCardLimit } from "@/lib/mcp-receipt"
 import { NextResponse } from "next/server"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { api, authenticate, checked, digest, json, publicCart, secret } from "@/lib/partner-api"
@@ -14,7 +15,11 @@ export async function POST(request: Request) { return api(async () => {
   if (key.mode === "live" && (process.env.PARTNER_LIVE_ENABLED !== "true" || !(Number(process.env.PARTNER_MIN_IMAGE_WIDTH)>0) || !(Number(process.env.PARTNER_MIN_IMAGE_HEIGHT)>0))) throw new ApiError(503,"live_not_enabled","Live handoff awaits production configuration")
   const idempotency = request.headers.get("idempotency-key")
   if (!idempotency || !/^[\x21-\x7e]{1,200}$/.test(idempotency)) throw new ApiError(400, "invalid_request", "Idempotency-Key is required (1–200 printable characters)")
-  const body = validateCart(await json(request), Number(process.env.PARTNER_MAX_CARDS || 1000), new URL(DEFAULT_CARD_BACK_PATH, request.url).href)
+  const raw = await json(request)
+  const limit = cartCardLimit({ customer_payment_only: raw?.customer_payment_only,
+    mode: key.mode, idempotency_key: idempotency, settlement: raw?.settlement ?? 'hosted' },
+    Number(process.env.PARTNER_MAX_CARDS || 1000))
+  const body = validateCart(raw, limit, new URL(DEFAULT_CARD_BACK_PATH, request.url).href)
   if (body.settlement === 'prepaid') {
     prepaidKey(key)
     const account=checked(await db.from(prepaidName('partner_credit_accounts')).select('terms_version').eq('partner_id',key.partner_id).maybeSingle())
