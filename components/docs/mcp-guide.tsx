@@ -104,8 +104,8 @@ gemini mcp list`}</CodeExample>
     <p><strong>Using a chat attachment?</strong> Attaching an image does not automatically give the MCP server its bytes. Your client needs a file-upload capability to PUT them to the temporary upload URL. If it cannot do that, provide direct public HTTPS PNG/JPEG URLs instead. A local file path, a sharing webpage or a made-up image URL will not work.</p>
 
     <h2 id="mcp--pricing">MCP pricing</h2>
-    <p><strong>$34.95 covers cards 1–18.</strong> Cards 19–180 add 35¢ each, cards 181–504 add 30¢ each, and every card from 505 onward adds 26¢, including above 1,008. There is no fixed MCP card-count cap. Rates apply only to cards in each band; later cards are not rounded up to full sheets and there is no markup.</p>
-    <p>Shipping follows the website&apos;s quantity tiers for US, Canada and other supported destinations. A US order of 1–18 cards is <strong>$41.90 before tax</strong>. Compare quantities and destinations below.</p>
+    <p><strong>$34.95 covers cards 1–18.</strong> Cards 19–180 add 35¢ each, cards 181–504 add 30¢ each, and every card from 505 onward adds 26¢, including above 1,008. Each MCP order is limited to 10,080 cards (560 sheets), counted across all designs. Rates apply only to cards in each band; later cards are not rounded up to full sheets and there is no markup.</p>
+    <p>MCP uses its own shipping bands through 10,080 cards for US, Canada and other supported destinations. These rates are separate from ordinary website and widget shipping. A US order of 1–18 cards is <strong>$41.90 before tax</strong>. Compare quantities and destinations below.</p>
     <McpPricingCalculator />
     <p><strong>Ordering just one card?</strong> Your assistant should say: “You can still order 17 more cards for no extra charge!” The base covers up to 18 cards. It must ask before increasing your quantity.</p>
     <p>Quotes return <code>savings_message</code>, <code>extra_cards_at_same_printing_price</code> and <code>extra_cards_at_same_total_before_tax</code>. Free capacity applies only to the first 18 cards. Later unused sheet positions are not free copies. Only requested copies are printed.</p>
@@ -138,7 +138,7 @@ gemini mcp list`}</CodeExample>
 
     <h2>Limits and private links</h2>
     <ul className="list-disc space-y-2 pl-6">
-      <li>No fixed MCP card-count cap; standard stock and finish, with a finished size of 63 × 88 mm.</li>
+      <li>Maximum 10,080 cards (560 sheets) per MCP order; standard stock and finish, with a finished size of 63 × 88 mm.</li>
       <li>Single-frame PNG or JPEG, up to 20 MiB and 40 million pixels per file. Files must be valid artwork; a webpage URL cannot be printed.</li>
       <li>Preview, checkout, confirmation, upload and preparation links/tokens are private. Anyone you share a preview link with can view that cart&apos;s artwork.</li>
       <li>Preview image URLs last up to 15 minutes. Use <strong>Reload previews</strong> while the cart is open and unexpired. The returned <code>expires_at</code> tells you when the cart expires.</li>
