@@ -1,4 +1,5 @@
 import { CodeExample } from './code-example'
+import McpPricingCalculator from '../McpPricingCalculator'
 
 const endpoint = 'https://www.tcgplaytest.com/api/mcp'
 
@@ -102,15 +103,14 @@ gemini mcp list`}</CodeExample>
     <p>To change an image or quantity, ask your assistant to prepare an updated order. Previewing does not charge you. The assistant cannot pay for an order or collect card payment details through these tools.</p>
     <p><strong>Using a chat attachment?</strong> Attaching an image does not automatically give the MCP server its bytes. Your client needs a file-upload capability to PUT them to the temporary upload URL. If it cannot do that, provide direct public HTTPS PNG/JPEG URLs instead. A local file path, a sharing webpage or a made-up image URL will not work.</p>
 
-    <h2 id="mcp--pricing">MCP sheet pricing</h2>
-    <p>MCP orders have a <strong>$34.95 card minimum</strong>. Cards are priced in sheets of 18, rounding up, with a 10% markup on the base rates: $0.35 through 144 billable cards, $0.30 through 500 and $0.26 through 1,000. The last sheet is capped at 1,000 billable cards. Only your requested quantity is printed.</p>
-    <p>Prices never decrease when you add cards: totals hold at the preceding sheet price when a rate drops. US shipping is <strong>$6.95</strong>, so <strong>1–90 cards cost $41.90 before tax</strong>. Other countries use their existing quantity-based shipping rates.</p>
-    <div className="overflow-x-auto"><table><caption>MCP examples before discounts and tax</caption><thead><tr><th>Cards</th><th>Sheets</th><th>Card price</th><th>With US shipping</th></tr></thead><tbody>
-      {[[1, 1, '34.95', '41.90'], [90, 5, '34.95', '41.90'], [108, 6, '41.58', '48.53'], [144, 8, '55.44', '62.39'], [162, 9, '55.44', '62.39'], [250, 14, '83.16', '90.11'], [504, 28, '160.38', '167.33'], [1000, 56, '286.00', '292.95']].map(([cards, sheets, price, total]) => <tr key={cards}><td>{cards}</td><td>{sheets}</td><td>${price}</td><td>${total}</td></tr>)}
-    </tbody></table></div>
-    <p><strong>Ordering just one card?</strong> You can add 17 more to fill the first sheet, and the minimum covers up to 90 cards total. Your assistant should tell you: “You can still order 89 more cards for no extra printing charge (90 cards total).” It must ask before increasing your quantity. International shipping and tax may change; compare the updated quote.</p>
-    <p>Quotes return <code>savings_message</code>, <code>extra_cards_at_same_printing_price</code> and the destination-aware <code>extra_cards_at_same_total_before_tax</code>. Average card price is informational. Preview and checkout show the same pricing. To change quantities, prepare a new order and review its quote.</p>
-    <p>Discounts cannot reduce the card subtotal below the greater of $34.95 or $0.26 per billable card. Extra-card allowances are before discounts. MCP requires customer payment and cannot spend PRINTS or partner credit. Website, partner API, widget, prepaid and Connect pricing keep their separate rules.</p>
+    <h2 id="mcp--pricing">MCP pricing</h2>
+    <p><strong>$34.95 covers cards 1–18.</strong> Cards 19–180 add 35¢ each, cards 181–504 add 30¢ each, and every card from 505 onward adds 26¢, including above 1,008. There is no fixed MCP card-count cap. Rates apply only to cards in each band; later cards are not rounded up to full sheets and there is no markup.</p>
+    <p>Shipping follows the website&apos;s quantity tiers for US, Canada and other supported destinations. A US order of 1–18 cards is <strong>$41.90 before tax</strong>. Compare quantities and destinations below.</p>
+    <McpPricingCalculator />
+    <p><strong>Ordering just one card?</strong> Your assistant should say: “You can still order 17 more cards for no extra charge!” The base covers up to 18 cards. It must ask before increasing your quantity.</p>
+    <p>Quotes return <code>savings_message</code>, <code>extra_cards_at_same_printing_price</code> and <code>extra_cards_at_same_total_before_tax</code>. Free capacity applies only to the first 18 cards. Later unused sheet positions are not free copies. Only requested copies are printed.</p>
+    <p>Discounts apply to cards and cannot reduce the card price below $34.95. MCP requires customer payment and cannot spend PRINTS or partner credit. Website, partner API, widget, prepaid and Connect pricing keep their separate rules.</p>
+    <p>Changed quantities require a new preparation and quote. After a pricing update, prepare a fresh cart if an existing Stripe session has an older price; already issued payment links are not repriced.</p>
 
     <h2>Available tools</h2>
     <ul className="space-y-3">
@@ -138,11 +138,11 @@ gemini mcp list`}</CodeExample>
 
     <h2>Limits and private links</h2>
     <ul className="list-disc space-y-2 pl-6">
-      <li>Maximum 1,000 total cards per order; standard stock and finish, with a finished size of 63 × 88 mm.</li>
+      <li>No fixed MCP card-count cap; standard stock and finish, with a finished size of 63 × 88 mm.</li>
       <li>Single-frame PNG or JPEG, up to 20 MiB and 40 million pixels per file. Files must be valid artwork; a webpage URL cannot be printed.</li>
       <li>Preview, checkout, confirmation, upload and preparation links/tokens are private. Anyone you share a preview link with can view that cart&apos;s artwork.</li>
       <li>Preview image URLs last up to 15 minutes. Use <strong>Reload previews</strong> while the cart is open and unexpired. The returned <code>expires_at</code> tells you when the cart expires.</li>
-      <li>Rate limits apply. Honor <code>Retry-After</code> or <code>retry_after_seconds</code>. After a temporary failure, retry the same request ID and artwork instead of creating duplicate preparations.</li>
+      <li>Request, upload and artwork-processing quotas still apply, separately from copy quantity. Honor <code>Retry-After</code> or <code>retry_after_seconds</code>. After a temporary failure, retry the same request ID and artwork instead of creating duplicate preparations.</li>
     </ul>
     <h2>Public MCP and partner integrations</h2>
     <p>All public MCP clients use TCGPlaytest&apos;s ordering service. The customer pays printing, shipping and applicable tax at checkout. Public MCP orders do not use a partner&apos;s prepaid printing balance or Connect earnings. For your own storefront branding, partner order reporting or payout integration, use the <a href="/docs/before-you-start">partner REST API</a> or <a href="/docs/widget">checkout widget</a>.</p>
