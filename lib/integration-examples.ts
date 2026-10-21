@@ -1,5 +1,6 @@
 // Runnable server/terminal examples. All credentials and deployment settings
 // come from the caller's environment, never from this public documentation.
+
 export const integrationExamples = {
   curl: String.raw`#!/usr/bin/env bash
 # Bash, curl and jq. Set API_BASE, TCGP_API_KEY, STORE_ORIGIN,
