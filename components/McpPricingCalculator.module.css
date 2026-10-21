@@ -1,0 +1,39 @@
+.calculator { margin: 28px 0; padding: clamp(18px, 3vw, 32px); border: 1px solid #244563; border-radius: 20px; background: #0d2540; color: #eaf2fc; font-family: system-ui, sans-serif; color-scheme: dark; min-width: 0; }
+.heading span { color: #ff9a3d; font-size: 11px; font-weight: 750; letter-spacing: .16em; }
+.calculator .heading h3 { margin: 8px 0; color: #fff; font-size: clamp(20px, 3vw, 28px); line-height: 1.25; }
+.calculator .heading p { margin: 0 0 24px; color: #b7c9de; font-size: 14px; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(175px, 1fr); gap: 24px; align-items: start; }
+.controls { min-width: 0; }
+.destinations { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; border: 0; padding: 0; margin: 0 0 20px; }
+.destinations legend { float: left; margin-right: 12px; padding: 7px 0; font-size: 13px; font-weight: 650; }
+.destinations label { position: relative; padding: 8px 12px; border-radius: 24px; background: #07192c; color: #b7c9de; cursor: pointer; font-size: 12px; font-weight: 700; }
+.destinations input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.destinations label:focus-within { outline: 2px solid white; outline-offset: 3px; }
+.destinations .active { background: #ff983c; color: #13233a; }
+.quantityLabel { display: block; margin-bottom: 10px; font-size: 13px; font-weight: 700; }
+.quantity { display: flex; gap: 14px; align-items: center; }
+.quantity input[type=range] { width: 100%; min-width: 0; accent-color: #ff983c; cursor: pointer; }
+.quantity input[type=number] { width: 105px; flex-shrink: 0; padding: 8px; border: 1px solid #345570; border-radius: 7px; background: #07192c; color: #fff; font: 700 16px system-ui; }
+.calculator .hint { margin: 9px 0 16px; color: #a6bdd7; font-size: 11px; line-height: 1.5; }
+.total { display: flex; flex-direction: column; gap: 4px; margin: 18px 0; }
+.total strong { font-size: clamp(30px, 4vw, 44px); line-height: 1.1; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.total span { color: #b7c9de; font-size: 12px; }
+.breakdown { font-size: 12px; margin: 18px 0; }
+.breakdown div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; }
+.breakdown dt { color: #b7c9de; }
+.breakdown small { display: block; font-size: 11px; }
+.breakdown dd { margin: 0; text-align: right; font: 650 12px ui-monospace, monospace; }
+.breakdown .subtotal { border-top: 1px solid #29445e; margin-top: 7px; padding-top: 12px; }
+.calculator .nudge { padding: 12px; margin: 16px 0 0; border: 1px dashed #478c82; border-radius: 7px; color: #77dfbe; font-size: 12px; font-weight: 650; line-height: 1.6; }
+.sheetTitle { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: center; font-size: 14px; }
+.sheetTitle button { background: none; border: 0; color: #fff; font-size: 23px; cursor: pointer; padding: 0 5px; }
+.sheetTitle button:disabled { opacity: .3; cursor: default; }
+.calculator .base { text-align: center; color: #ff9a3d; margin: 6px 0 12px; font-size: 11px; font-weight: 650; }
+.sheet { padding: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 14px; border-radius: 10px; background: #061a30; justify-items: center; }
+.card, .empty { width: 100%; max-width: 48px; aspect-ratio: 63 / 88; border-radius: 3px; display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: 700; }
+.card { background: #ff983c; color: #14253a; }
+.empty { background: #132a43; border: 1px dashed #43607c; }
+.calculator .sheetCaption { text-align: center; color: #b7c9de; margin: 10px 0 0; font-size: 11px; }
+.notes { border-top: 1px solid #29445e; margin-top: 24px; padding-top: 14px; }
+.calculator .notes p { color: #b7c9de; font-size: 12px; line-height: 1.65; margin: 8px 0; }
+@media (max-width: 650px) { .layout { grid-template-columns: minmax(0, 1fr); } .sheetPanel { width: 100%; max-width: 300px; margin: 0 auto; } }
