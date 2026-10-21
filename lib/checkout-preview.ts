@@ -1,4 +1,4 @@
-import { isMcpCart } from './mcp-receipt'
+import { isMcpCart, cartCardLimit } from './mcp-receipt'
 import { createHash } from "node:crypto"
 import { ApiError } from "./manufacturing-contract"
 
@@ -12,8 +12,8 @@ const unavailable = () => new ApiError(409, "preview_unavailable", "This preview
 // Accept only the checkout capability, never an arbitrary cart ID or storage path.
 // Kept separate from the route so authorization and storage isolation are testable.
 export async function checkoutPreview(db: any, body: any, now = Date.now()) {
-  if (!/^[a-f0-9]{64}$/.test(body?.token || "") || !Number.isInteger(body?.page ?? 1)
-    || (body.page ?? 1) < 1 || (body.page ?? 1) > 167) {
+  if (!/^[a-f0-9]{64}$/.test(body?.token || "") || !Number.isSafeInteger(body?.page ?? 1)
+    || (body.page ?? 1) < 1) {
     throw new ApiError(400, "invalid_request", "Valid preview token and page required")
   }
   const cart = checked(await db.from("partner_carts")
@@ -24,14 +24,16 @@ export async function checkoutPreview(db: any, body: any, now = Date.now()) {
     || !Number.isFinite(Date.parse(cart.expires_at)) || Date.parse(cart.expires_at) <= now
     || cart.partner?.status !== "approved" || cart.partner?.api_blocked_at) throw unavailable()
 
-  // A 1,000-card cart can contain 2,000 sides. Fetch bounded pages below the
-  // default PostgREST row cap; range(0,1999) alone would still be truncated.
-  // No customer, payment or source URL data is read.
+  const limit = cartCardLimit(cart)
+  if (!Number.isSafeInteger(cart.card_count) || cart.card_count < 1
+    || (limit !== null && cart.card_count > limit)) throw unavailable()
+  // At most two sides per requested card. Fetch database pages rather than
+  // truncating large MCP carts at the old 2,000-side limit.
   const files: any[] = []
-  for (let offset = 0; offset < 2000; offset += 500) {
+  for (let offset = 0; offset < cart.card_count * 2; offset += 500) {
     const batch = checked(await db.from("partner_artwork")
       .select("item_index,side,quantity,state,deleted_at,storage_path,actual_sha256,expected_sha256,print_storage_path,print_sha256")
-      .eq("cart_id", cart.id).order("item_index").order("side").range(offset, offset + 499)) || []
+      .eq("cart_id", cart.id).order("item_index").order("side").range(offset, Math.min(offset + 499, cart.card_count * 2 - 1))) || []
     files.push(...batch)
     if (batch.length < 500) break
   }
@@ -39,7 +41,7 @@ export async function checkoutPreview(db: any, body: any, now = Date.now()) {
   const designs = new Map<number, { item_index: number; quantity: number; front?: any; back?: any }>()
   for (const file of files) {
     if (!Number.isInteger(file.item_index) || file.item_index < 0 || !["front", "back"].includes(file.side)
-      || !Number.isInteger(file.quantity) || file.quantity < 1 || file.quantity > 1000) throw unavailable()
+      || !Number.isSafeInteger(file.quantity) || file.quantity < 1 || file.quantity > cart.card_count) throw unavailable()
     const design = designs.get(file.item_index) || { item_index: file.item_index, quantity: file.quantity }
     if (design.quantity !== file.quantity || (design as any)[file.side]) throw unavailable()
     ;(design as any)[file.side] = file
@@ -47,7 +49,7 @@ export async function checkoutPreview(db: any, body: any, now = Date.now()) {
   }
   const all = Array.from(designs.values()).sort((a, b) => a.item_index - b.item_index)
   if (all.some(d => !d.front || !d.back) || all.reduce((n, d) => n + d.quantity, 0) !== cart.card_count
-    || cart.card_count > 1000) throw unavailable()
+    || !Number.isSafeInteger(all.reduce((n, d) => n + d.quantity, 0))) throw unavailable()
   const pages = Math.ceil(all.length / PAGE_SIZE), page = body.page ?? 1
   if (page > pages) throw new ApiError(404, "page_not_found", "Preview page not found")
   const selected = all.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)

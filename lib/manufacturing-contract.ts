@@ -38,12 +38,12 @@ function hash(value: unknown, field: string) {
 
 export const DEFAULT_CARD_BACK_PATH = "/partner-widget/default-card-back.jpg"
 
-export function validateCart(body: any, maxCards = 1000, defaultBackUrl?: string) {
+export function validateCart(body: any, maxCards: number | null = 1000, defaultBackUrl?: string) {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new ApiError(400, "invalid_request", "Expected a JSON object")
   if (Object.hasOwn(body, "certification")) throw new ApiError(400, "invalid_request", "Remove certification. Accept partner terms once in the dashboard; the customer confirms image rights at checkout.")
   const allowed = ["items", "back_image_url", "back_sha256", "card_stock", "external_ref", "return_url", "settlement", "retail_amount_cents", "customer_payment_only"]
   if (Object.keys(body).some(key => !allowed.includes(key))) throw new ApiError(400, "invalid_request", "Unknown cart field")
-  if (!Array.isArray(body.items) || !body.items.length || body.items.length > maxCards) throw new ApiError(400, "invalid_request", `Submit 1–${maxCards} items`)
+  if (!Array.isArray(body.items) || !body.items.length || (maxCards !== null && body.items.length > maxCards)) throw new ApiError(400, "invalid_request", maxCards === null ? 'Submit at least one item' : `Submit 1–${maxCards} items`)
   // Thick stock remains unavailable until production confirms its specifications and rate.
   if (body.card_stock && body.card_stock !== "standard") throw new ApiError(400, "invalid_request", "Only standard card stock is currently supported")
   if (body.settlement !== undefined && !['hosted','prepaid','connect'].includes(body.settlement)) throw new ApiError(400, 'invalid_request', 'settlement must be hosted, prepaid or connect')
@@ -58,7 +58,8 @@ export function validateCart(body: any, maxCards = 1000, defaultBackUrl?: string
       if (!item || !Number.isSafeInteger(item.quantity) || item.quantity < 1) throw new ApiError(400, "invalid_request", "quantity must be a positive integer")
       if (Object.keys(item).some(key => !["image_url", "sha256", "quantity", "back_image_url", "back_sha256"].includes(key))) throw new ApiError(400, "invalid_request", "Unknown item field")
       count += item.quantity
-      if (count > maxCards) throw new ApiError(400, "invalid_request", `Maximum ${maxCards} cards per cart`)
+      if (!Number.isSafeInteger(count)) throw new ApiError(400, 'invalid_request', 'Total quantity exceeds supported numeric precision')
+      if (maxCards !== null && count > maxCards) throw new ApiError(400, "invalid_request", `Maximum ${maxCards} cards per cart`)
       return {
         image_url: httpsUrl(item.image_url, "image_url"), sha256: hash(item.sha256, "sha256"), quantity: item.quantity,
         back_image_url: httpsUrl(item.back_image_url ?? body.back_image_url ?? defaultBackUrl, "back_image_url"),

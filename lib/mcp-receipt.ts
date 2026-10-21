@@ -9,6 +9,11 @@ export function isMcpCart(cart: any) {
     && cart.mode === "live" && cart.settlement === "hosted" && !cart.connect_account_id
 }
 
+// A null limit is reserved for the authenticated MCP cart classification.
+export function cartCardLimit(cart: any, partnerLimit = 1000): number | null {
+  return isMcpCart(cart) ? null : partnerLimit
+}
+
 export function mcpReceiptUrl(cart: any): string | undefined {
   if (!isMcpCart(cart)) return undefined
   const url = new URL(cart.checkout_url)
@@ -34,7 +39,7 @@ export async function checkoutReceipt(db: any, body: any, now = Date.now()) {
   if (!cart || !isMcpCart(cart) || !/^cart_[a-f0-9]{64}$/.test(cart.id)
     || !["validating", "open", "converted", "cancelled"].includes(cart.status)
     || !Number.isFinite(Date.parse(cart.expires_at)) || Date.parse(cart.expires_at) <= now
-    || !Number.isInteger(cart.card_count) || cart.card_count < 1 || cart.card_count > 1000
+    || !Number.isSafeInteger(cart.card_count) || cart.card_count < 1
     || cart.partner?.status !== "approved" || cart.partner?.api_blocked_at) throw unavailable()
 
   const base = { card_count: cart.card_count, expires_at: cart.expires_at }
