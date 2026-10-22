@@ -348,7 +348,7 @@
         progress("Connecting to TCGPlaytest…");
         var session = await widgetRequest("sessions", "POST", { partner_key: settings.partnerKey, mode: settings.mode || "live" });
         if (total > session.max_cards || items.length > session.max_cards) throw new Error("This order exceeds the maximum of " + session.max_cards + " cards.");
-        attempt = { token: session.token, expires: Date.parse(session.expires_at), items: items, uploaded: [], blobs: new Map(), externalRef: config.externalRef };
+        attempt = { token: session.token, expires: Date.parse(session.expires_at), items: items, uploaded: [], blobs: new Map(), externalRef: config.externalRef, returnUrl: config.returnUrl };
       }
       if (!attempt.payload) {
         async function upload(value) {
@@ -408,6 +408,7 @@
         if (uploadError) throw uploadError;
         attempt.payload = { items: attempt.uploaded };
         if (attempt.externalRef) attempt.payload.external_ref = attempt.externalRef;
+        if (attempt.returnUrl) attempt.payload.return_url = attempt.returnUrl;
         saveAttempt();
       }
       progress("Submitting artwork for validation…");
@@ -428,6 +429,7 @@
         throw new Error((result.errors || []).map(function (item) { return "Item " + (item.item_index + 1) + " " + (item.side || "") + ": " + item.message; }).join(" ") || "Checkout is " + result.status + ". Start a new order if appropriate.");
       }
       progress("Artwork checked. Opening checkout…");
+      if (typeof config.onCartReady === "function") await config.onCartReady(result);
       openEmbeddedCheckout(result, config);
     } catch (error) { progress(error.message); throw error; }
     finally { if (dialog) dialog.finish(); }
@@ -474,8 +476,10 @@
     dialog.addEventListener('cancel', function (event) { event.preventDefault(); finish(); });
     if (cart.mode === 'test') {
       var preview = document.createElement('p'); preview.className = 'preview';
-      preview.textContent = 'Artwork checks passed. This is a non-paying test preview; no printing or shipping will occur.';
-      shell.appendChild(preview);
+      preview.textContent = 'Artwork checks passed. Complete a simulated checkout, receive test order events and return to your store. No charge, printing or shipping will occur.';
+      var simulate = document.createElement('button'); simulate.type = 'button'; simulate.textContent = 'Open simulated checkout';
+      simulate.onclick = function () { window.location.assign(target.href); };
+      preview.appendChild(document.createElement('br')); preview.appendChild(simulate); shell.appendChild(preview);
     } else {
       target.pathname = '/embed' + target.pathname;
       target.searchParams.set('parent_origin', window.location.origin);
@@ -561,7 +565,8 @@
     }
     // Open the same validated checkout inside the partner page.
     // Payment/production success must be confirmed with signed order webhooks.
-    openEmbeddedCheckout(result, config);
+    if (typeof config.onCartReady === "function") await config.onCartReady(result);
+      openEmbeddedCheckout(result, config);
   }
 
   function open(options) {
