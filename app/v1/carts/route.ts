@@ -35,8 +35,7 @@ export async function POST(request: Request) { return api(async () => {
     return NextResponse.json(publicCart(existing), { status: existing.status === "validating" ? 202 : 200, headers: { "Cache-Control": "no-store", "Retry-After": "3" } })
   }
   let connect: any = null
-  if (body.settlement === 'connect') {
-    if (key.mode !== 'live') throw new ApiError(400,'connect_key_required','Use a live partner API key for Connect. Stripe credentials select the payment environment.')
+  if (body.settlement === 'connect' && key.mode === 'live') {
     connect = await readyConnect(key.partner)
   }
   for (const item of body.items) {
@@ -54,6 +53,7 @@ export async function POST(request: Request) { return api(async () => {
   const cart = { id, partner_id: key.partner_id, api_key_id: key.id, mode: key.mode, status: "validating", external_ref: body.external_ref,
     ...(body.customer_payment_only === true ? { customer_payment_only: true } : {}),
     settlement: body.settlement === 'connect' ? 'hosted' : body.settlement || 'hosted',
+    ...(body.settlement === 'connect' && key.mode === 'test' ? { sandbox_retail_cents: body.retail_amount_cents } : {}),
     connect_retail_cents: connect ? body.retail_amount_cents : null, connect_account_id: connect?.stripe_account_id || null, connect_payment_mode: connect ? connectMode() : null,
     card_count: body.card_count, card_stock: body.card_stock, affiliate_code: ['prepaid','connect'].includes(body.settlement) ? null : key.partner.checkout_affiliate_code || null, return_url: returnUrl,
     partner_terms_version: key.partner.terms_version, partner_terms_accepted_at: key.partner.terms_accepted_at,
