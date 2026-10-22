@@ -58,6 +58,7 @@ export async function authenticate(request: Request, options: { polling?: boolea
   return record
 }
 export function publicCart(cart: any) {
+  const retail = cart.mode === 'test' ? cart.sandbox_retail_cents : cart.connect_retail_cents
   const status = ["validating", "open"].includes(cart.status) && Date.parse(cart.expires_at) <= Date.now() ? "expired" : cart.status
   const receipt = ["open", "converted", "cancelled"].includes(status) && Date.parse(cart.expires_at) > Date.now() ? mcpReceiptUrl(cart) : undefined
   return { id: cart.id, status, pricing_channel: isMcpCart(cart) ? 'mcp' : 'partner',
@@ -66,5 +67,5 @@ export function publicCart(cart: any) {
     external_ref: cart.external_ref, card_count: cart.card_count, card_stock: cart.card_stock, affiliate_code: cart.affiliate_code,
     progress: { done: cart.validation_done || 0, total: cart.validation_total || 0 }, errors: cart.validation_errors || [], warnings: cart.artwork_warnings || [],
     partner_terms_version: cart.partner_terms_version || null,
-    mode: cart.mode, ...(cart.connect_retail_cents != null ? {settlement:'connect',retail_amount_cents:cart.connect_retail_cents} : cart.settlement === 'prepaid' ? {settlement:'prepaid'} : {}), ...(status === "open" && cart.settlement !== 'prepaid' ? { checkout_url: cart.checkout_url } : {}), order_id: cart.order_id, expires_at: cart.expires_at, created_at: cart.created_at }
+    mode: cart.mode, ...(retail != null ? {settlement:'connect',retail_amount_cents:retail} : cart.settlement === 'prepaid' ? {settlement:'prepaid'} : {}), ...(status === "open" && cart.settlement !== 'prepaid' ? { checkout_url: cart.checkout_url } : {}), order_id: cart.order_id, expires_at: cart.expires_at, created_at: cart.created_at }
 }

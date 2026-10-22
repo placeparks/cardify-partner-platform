@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto"
 import { supabaseAdmin as db } from "@/lib/supabase-admin"
 import { api, checked, digest, json, publicCart, secret } from "@/lib/partner-api"
-import { ApiError, DEFAULT_CARD_BACK_PATH, hasPartnerTerms, validateCart } from "@/lib/manufacturing-contract"
+import { ApiError, DEFAULT_CARD_BACK_PATH, hasPartnerTerms, partnerReturnUrl, validateCart } from "@/lib/manufacturing-contract"
 import { scheduleCartValidation } from "@/lib/validation-dispatch"
 
 const BUCKET = "partner-artwork"
@@ -109,7 +109,7 @@ export async function widgetUpload(request: Request) {
 }
 export async function widgetCart(request: Request) {
   const session = await widgetSession(request), input = await json(request)
-  if (!input || Object.keys(input).some(k => !["items", "external_ref"].includes(k)) || !Array.isArray(input.items) || !input.items.length || input.items.length > Number(process.env.PARTNER_MAX_CARDS || 1000)) throw new ApiError(400, "invalid_request", "Send items with front_upload_id and quantity. Include back_upload_id only for a custom or double-sided back.")
+  if (!input || Object.keys(input).some(k => !["items", "external_ref", "return_url"].includes(k)) || !Array.isArray(input.items) || !input.items.length || input.items.length > Number(process.env.PARTNER_MAX_CARDS || 1000)) throw new ApiError(400, "invalid_request", "Send items with front_upload_id and quantity. Include back_upload_id only for a custom or double-sided back.")
   for (const item of input.items) if (!item || Object.keys(item).some(k => !["front_upload_id", "back_upload_id", "quantity"].includes(k)) || !uuid.test(item.front_upload_id || "") || (item.back_upload_id != null && !uuid.test(item.back_upload_id))) throw new ApiError(400, "invalid_request", "Use front/back upload IDs from this session. Omit the back to use the TCGPlaytest back.")
   const ids = [...new Set<string>(input.items.flatMap((item: any) => [item.front_upload_id, item.back_upload_id].filter(Boolean)))]
   const uploads = checked(await db.from("partner_widget_uploads").select("id").eq("session_id", session.id).in("id", ids)) || []
@@ -119,12 +119,13 @@ export async function widgetCart(request: Request) {
   if (!origin) throw new ApiError(503, "checkout_unavailable", "Checkout is not configured.")
   const hours = limit("PARTNER_CART_EXPIRY_HOURS", 168, 168), retention = Number(process.env.PARTNER_ARTWORK_RETENTION_DAYS || 30)
   if (!Number.isInteger(retention) || retention < 0 || retention > 365) throw new ApiError(503, "configuration_error", "Invalid retention period")
+  const returnUrl = partnerReturnUrl(input.return_url, session.partner.website_url)
   const token = secret("")
   const cart = { id: secret("cart_"), partner_id: session.partner_id, api_key_id: null, widget_session_id: session.id, mode: session.mode, status: "validating",
     external_ref: body.external_ref, card_count: body.card_count, card_stock: body.card_stock, affiliate_code: session.partner.checkout_affiliate_code || null,
-    return_url: session.partner.website_url, certification: null, certification_text: {}, submitted_by: session.partner.user_id,
+    return_url: returnUrl, certification: null, certification_text: {}, submitted_by: session.partner.user_id,
     flow_version: 2, validation_done: 0, validation_total: 0, validation_errors: [], retention_days: retention,
-    idempotency_key: `widget:${session.id}`, request_hash: digest(JSON.stringify(body)), checkout_token_hash: digest(token),
+    idempotency_key: `widget:${session.id}`, request_hash: digest(JSON.stringify(input.return_url === undefined ? body : { ...body, return_url: returnUrl })), checkout_token_hash: digest(token),
     checkout_url: `${origin.replace(/\/$/, "")}/partner-checkout/${token}`, order_id: null,
     created_at: new Date().toISOString(), expires_at: new Date(Date.now() + hours * 3600000).toISOString() }
   const files = body.items.flatMap((item: any, index: number) => [
