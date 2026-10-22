@@ -3,6 +3,7 @@ import { CodeExample } from './code-example'
 export function ConnectGuide({baseUrl}:{baseUrl:string}){
  return <>
   <h2>One payment, separate partner earnings</h2><p>Connect is an optional server API flow for US partners. Set a selling price for the cards; TCGPlaytest adds delivery and applicable tax, collects the customer payment and fulfills the order. Accept payout terms and finish onboarding in <Link href="/dashboard/connect">Dashboard → Payouts</Link>.</p>
+  <p>To test order confirmation, return handling and shipment notifications without Stripe, use a <code>tcgp_test_</code> key with the same Connect cart fields. No payout onboarding is required for the <Link href="/docs/sandbox">checkout simulator</Link>. Prices, tax, fees and transfers are not exercised by this simulator.</p>
   <h2>Create a Connect cart</h2><p>Keep your existing live partner API key on your server. Add <code>settlement: "connect"</code> and <code>retail_amount_cents</code> to the usual cart request. The amount is the entire cart&apos;s card-sale subtotal in USD cents, excluding shipping and tax, and must cover printing. It is immutable; changed artwork, quantities or price require a new cart and idempotency key. Build this price from your saved order on your server, never directly from browser input.</p>
   <CodeExample label="Connect cart · cURL">{`curl --request POST '${baseUrl}/v1/carts' \\
   --header "Authorization: Bearer $TCGP_API_KEY" \\

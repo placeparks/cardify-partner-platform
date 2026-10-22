@@ -4,6 +4,7 @@ import { CodeExample as Code, CodeTabs } from '@/components/docs/code-example'
 import { DocsOverview, GoLiveGuide } from '@/components/docs/docs-guides'
 import styles from '@/components/docs/docs.module.css'
 import Link from "next/link"
+import { SandboxGuide } from '@/components/docs/sandbox-guide'
 import { ConnectGuide } from '@/components/docs/connect-guide'
 import { McpGuide } from '@/components/docs/mcp-guide'
 import { PrepaidGuide } from '@/components/prepaid-guide'
@@ -55,6 +56,7 @@ if (!statusResponse.ok) throw new Error(status.error.message);
 <DocsOverview baseUrl={config.baseUrl} />
     ) },
     { id:"mcp", title:"Order with AI · MCP", group:"Get started", description:"Connect ChatGPT, Claude, Gemini or your developer tools, preview your cards and check out without a TCGPlaytest account or customer API key.", keywords:"MCP model context protocol AI assistant remote streamable HTTP no login guest preview ChatGPT OpenAI Claude Gemini Codex Cursor connector setup", content: <McpGuide /> },
+    { id:"sandbox", title:"Test checkout & events", group:"Get started", description:"Simulate checkout, verify the order, return to your store and trigger signed test events.", keywords:"sandbox test hosted Connect confirmation webhook production shipment cart clearing", content: <SandboxGuide baseUrl={config.baseUrl} /> },
     { id:"before-you-start", title:"Quickstart & authentication", group:"Get started", description:"Set up your account, protect your API key and make your first integration.", keywords:"Google auth bearer token secret website application account", content: (
     <section id="before-you-start" className="scroll-mt-24 space-y-3 rounded border border-emerald-300/20 p-4 sm:p-6">
       <h2 className="text-2xl font-bold">Before you start</h2>
@@ -65,7 +67,7 @@ if (!statusResponse.ok) throw new Error(status.error.message);
         <li>Choose your integration: for the <a href="/docs/widget" className="underline">standalone widget</a>, copy your personalized snippet and connect finished card images. For a server API integration, create a test/live key under <strong>1. Server-side API keys</strong>. Keep that secret on your server; the standalone widget does not need it.</li>
         <li>For lifecycle notifications, configure <strong>2. Order webhooks</strong> and copy its separate signing secret. See <a href="/docs/webhooks" className="underline">webhook setup</a>.</li>
       </ol>
-      <p>No Stripe Connect account is required for ordinary or prepaid checkout. Optional Connect payouts require onboarding. A test key runs artwork validation and opens a non-paying hosted preview. The optional prepaid sandbox supports simulated Stripe payments with test credit; test orders never print or ship. A live key enables payment checkout when that deployment is configured for it.</p>
+      <p>No Stripe Connect account is required for ordinary or prepaid checkout. Optional Connect payouts require onboarding. A test key runs artwork validation and a <a href="/docs/sandbox">complete simulated checkout</a>, including order confirmation and signed test events. The optional prepaid sandbox supports simulated Stripe payments with test credit; test orders never print or ship. A live key enables payment checkout when that deployment is configured for it.</p>
       <h3>Authenticate from your server</h3>
       <p>Send your partner key as a bearer token. Bind every cart and upload reference to the owning customer session. Never place the secret in browser code or a public environment variable.</p>
       <Code label="Server environment">{`TCGP_API_BASE=${config.baseUrl}
@@ -105,12 +107,12 @@ STORE_ORIGIN=https://your-store.example`}</Code>
     ) },
     { id:"widget", title:"Checkout widget", group:"Build your integration", description:"Connect finished images to a ready-made review and checkout experience.", keywords:"standalone snippet public key session estimate fronts backs", content: (
     <section id="widget" className="scroll-mt-24 space-y-4">
-      <h2 className="text-2xl font-bold">Standalone checkout widget</h2>
+      <h2 className="text-2xl font-bold">Standalone checkout widget</h2><p>For verified return handling, configure <code>externalRef</code> for your saved checkout revision, <code>returnUrl</code> on your registered website, and an async <code>onCartReady(cart)</code> callback to bind the cart to your customer on your server. The callback is awaited before opening checkout and may run again on retries. See <a href="/docs/sandbox">the complete test flow</a>.</p>
       <p>The widget uses a public <code>widget_partner_key</code> assigned to your account automatically. Accept partner terms, copy the personalized snippet from your dashboard and connect your editor&apos;s finished images. You do not need a secret API key, your own storage or a server cart endpoint for this integration.</p>
       <p>Clicking the widget button opens a TCGPlaytest-branded modal with each design&apos;s front, matching back, quantity and total card count. The customer reviews the cards, then clicks <strong>Proceed to checkout</strong>. Only then do uploads and validation begin. Once the artwork is ready, the widget opens checkout inside your page for contact/shipping details and image-rights confirmation. Only the payment step opens Stripe. The modal does not collect card payment credentials.</p>
       <ol className="list-decimal space-y-2 pl-6">
         <li>Under <strong>3. Add TCGPlaytest to your website</strong>, add any additional HTTPS website origins. Your registered website is allowed automatically. Exact origins only: production and preview domains must be added separately; no wildcards or localhost.</li>
-        <li>Copy your snippet. Use <code>data-mode="test"</code> for a non-paying preview, or <code>data-mode="live"</code> for the configured checkout website. Use the snippet&apos;s partner-platform and checkout origins together.</li>
+        <li>Copy your snippet. Use <code>data-mode="test"</code> for a simulated checkout, or <code>data-mode="live"</code> for the configured checkout website. Use the snippet&apos;s partner-platform and checkout origins together.</li>
         <li>Pass finished PNG/JPEG <code>Blob</code>/<code>File</code> objects or async functions that return them. Return <code>{'{ items, sharedBack }'}</code> to apply one selected back to single-sided designs. Supply an item-specific back for double-sided cards. Omit both to use the TCGPlaytest default back. The widget handles back selection, previews and uploads. Quantities count physical cards.</li>
       </ol>
       <Code label="Standalone widget browser integration">{`// Run after the personalized widget script has loaded.
@@ -165,7 +167,7 @@ printButton.onclick = () => TCGPlaytest.open().catch(error => {
 // Never send the partner API secret to the browser.
 if (cart.status === "open") TCGPlaytest.checkout(cart);
 // Do not navigate window.location to cart.checkout_url for this flow.`}</Code>
-      <p>The helper validates the checkout URL and opens a protected frame on the partner page. Closing it keeps the submitted cart available to resume. Test carts display a non-paying preview inside the page. For an intentional full-page handoff, add <code>data-checkout-display="redirect"</code> to the script; embedded checkout is the default.</p>
+      <p>The helper validates the checkout URL and opens a protected frame on the partner page. Closing it keeps the submitted cart available to resume. Test carts show an Open simulated checkout button that opens a full-page sandbox. For an intentional full-page handoff, add <code>data-checkout-display="redirect"</code> to the script; embedded checkout is the default.</p>
       <p>Existing API clients that explicitly redirect to <code>checkout_url</code> must replace that redirect with the helper above. The API cannot control navigation already performed by a partner&apos;s browser code.</p>
       <h3 className="text-xl font-bold">If checkout is blocked</h3>
       <p>Test previews do not exercise the live checkout frame. Save the exact HTTPS origin of the page opening checkout under Dashboard → Widget websites; <code>www.example.com</code> and <code>example.com</code> are different origins. Use a fresh live cart whose status is <code>open</code>. An expired, already-used or unvalidated cart cannot open checkout.</p>
@@ -179,7 +181,7 @@ if (cart.status === "open") TCGPlaytest.checkout(cart);
       <p>Open <Link href="/dashboard" className="underline">Dashboard → 4. Checkout branding</Link>, enable branding and save. Choose a store name, PNG/JPEG logo (up to 200 KiB), accent color, light/dark theme, system/rounded/serif font, classic/panel layout, heading preset and an optional plain-text welcome message.</p>
       <p>Branding belongs to your account and applies automatically when an API or widget customer opens hosted checkout. Existing open checkout pages need a reload to see changes. Disable branding and save to restore the standard checkout. Logos are decoded, resized to fit 512 × 128 and stored with your settings; remote images, SVG, HTML, CSS and JavaScript are not accepted.</p>
       <p>Prices, shipping/tax calculations, required customer fields, image-quality warnings and acknowledgment, rights confirmation, payment flow, purchase terms and the TCGPlaytest / Cardify LLC seller disclosure cannot be edited or hidden. Button text contrast is selected automatically. These settings do not change the widget review modal, Stripe/PayPal payment screens, receipts or packaging.</p>
-      <p><strong>No cart API changes are needed.</strong> Do not send branding, a logo, CSS or a checkout URL in <code>POST /v1/carts</code>. Follow the returned <code>checkout_url</code>; the platform loads your saved settings. Test checkout remains a non-paying validation screen; use the dashboard style preview to inspect branding without placing a live order.</p>
+      <p><strong>No cart API changes are needed.</strong> Do not send branding, a logo, CSS or a checkout URL in <code>POST /v1/carts</code>. Follow the returned <code>checkout_url</code>; the platform loads your saved settings. Test checkout uses a dedicated simulator; use the dashboard style preview to inspect branding without placing a live order.</p>
     </section>
     ) },
     { id:"success-page", title:"Custom success page", group:"Build your integration", description:"Return customers to your registered website after verified payment.", keywords:"return_url website_url STORE_ORIGIN allowed origin localhost redirect domain", content: (
@@ -230,7 +232,7 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
         ["upload_url / method / headers", "PUT raw file bytes using the returned headers. No partner API key, storage account credentials or cookies are sent to storage. Browser uploads bypass the application server's body-size limit."],
         ["upload_expires_at", "RFC 3339 timestamp: upload link expires after 2 hours. It permits one new object and cannot overwrite it. On a failed/uncertain PUT, request a new grant and upload again."],
         ["image_url / expires_at", "Opaque signed image reference, valid for 8 days. Keep it private and use it unchanged. It belongs to the issuing partner and key mode; source access stops if that key is revoked. Create the cart promptly."],
-        ["Validation", "Successful upload does not mean print-ready. The cart's background worker still checks format, full decoding, size, dimensions, hashes and content. Test keys support uploads and validation. Hosted test checkout is a non-paying preview; prepaid sandbox payments use Stripe test credentials only."],
+        ["Validation", "Successful upload does not mean print-ready. The cart's background worker still checks format, full decoding, size, dimensions, hashes and content. Test keys support uploads and validation. Hosted test checkout supports simulated completion and order events; prepaid sandbox payments use Stripe test credentials only."],
         ["Storage and retention", "TCGPlaytest stores the source and validated artwork. Maintenance removes expired source staging files, normally within the following day. Each cart gets its own checked files under normal cart/order retention; partners need no cleanup job."],
         ["Errors", "400 invalid_request: fix metadata. 403 invalid_upload: wrong/tampered partner reference. 404 upload_not_found: PUT not completed. 410 upload_expired: upload again. 503 uploads_unavailable: platform configuration needs attention. Standard authentication and rate-limit errors also apply."],
       ]}/>
@@ -285,7 +287,7 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
       ]}/>
       <ul className="list-disc space-y-2 pl-6">
         <li><code>validating</code>: continue polling. Errors can appear as checks finish; wait for the terminal result to get every bad item/side.</li>
-        <li><code>open</code>: checks passed. For hosted checkout, open the cart with <code>TCGPlaytest.checkout(cart)</code> on your page; test mode opens a non-paying preview. For <code>settlement: prepaid</code>, continue with <a href="/docs/prepaid" className="underline">quote → reserve → submit</a> on your server.</li>
+        <li><code>open</code>: checks passed. For hosted checkout, open the cart with <code>TCGPlaytest.checkout(cart)</code> on your page; test mode opens the simulated checkout flow. For <code>settlement: prepaid</code>, continue with <a href="/docs/prepaid" className="underline">quote → reserve → submit</a> on your server.</li>
         <li><code>failed</code>: stop polling, inspect all errors, fix the inputs and create a new cart with a new <strong>Idempotency-Key</strong>. Keep your existing API key.</li>
         <li><code>converted</code>: hosted payment, or both printing credit and customer shipping/tax payment, funded the order. An order ID is available; use order status/webhooks. For prepaid orders this does not verify the shopper&apos;s separate card purchase in your store.</li>
         <li><code>expired</code>, <code>blocked</code>, <code>cancelled</code>: checkout is unavailable. Stop polling; do not retry blocked content. An expired cart needs a new cart and idempotency key.</li>
@@ -298,7 +300,7 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
     <section id="orders" className="scroll-mt-24 space-y-4">
       <h2 className="text-2xl font-bold">GET /v1/orders/&#123;id&#125;</h2>
       <div className={styles.endpoint}><span>GET</span><code>{"/v1/orders/{id}"}</code></div>
-      <p>Use <code>cart.order_id</code> or the <code>data.id</code> from an <code>order.*</code> webhook. This is the manufacturing order ID, not a cart ID or Stripe session ID. Orders exist after live payment is recorded; test prepaid carts create only simulated orders, never manufacturing orders.</p>
+      <p>Use <code>cart.order_id</code> or the <code>data.id</code> from an <code>order.*</code> webhook, not a cart ID or Stripe session ID. Live manufacturing orders exist after payment is recorded. Hosted/Connect simulator orders use <code>test_order_…</code> IDs; these and prepaid sandbox orders return <code>mode: "test"</code> and <code>simulated: true</code> and never print or ship.</p>
       <Code label="Order status response">{pretty(examples.order)}</Code>
       <Fields label="Order response fields" rows={[
         ["id / cart_id", "Opaque order ID and originating cart ID."],
@@ -318,7 +320,7 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
         <li>Select <strong>Test</strong> or <strong>Live</strong>. Enter an HTTPS endpoint on the exact origin of your registered website, for example <code>https://shop.example/webhooks/tcgplaytest</code>.</li>
         <li>Select <strong>Save webhook</strong> and store the displayed <code>whsec_</code> signing secret on your server. It is shown once. Saving again rotates that mode&apos;s secret; update your receiver.</li>
       </ol>
-      <p>Test and live settings are separate. Test carts can produce <code>cart.expired</code> after expiry and worker processing. Hosted test carts do not produce order events. A paid prepaid sandbox order produces <code>order.paid</code> on the Test webhook with <code>data.simulated: true</code>; sandbox cancellation can produce <code>order.cancelled</code>. Test orders never produce production or shipment events. There is no synthetic-event endpoint; use the examples for local receiver tests.</p>
+      <p>Test and live settings are separate. Test carts can produce <code>cart.expired</code> after expiry and worker processing. Hosted and Connect simulator carts emit <code>order.paid</code> on completion. The <a href="/docs/sandbox">test events API</a> can then emit <code>order.in_production</code>, <code>order.shipped</code> or <code>order.cancelled</code>. These events include <code>data.mode: "test"</code> and <code>data.simulated: true</code> and go only to the Test webhook. They never start real fulfillment. Prepaid sandbox events retain their existing flow.</p>
       <p>Live order events are <code>order.paid</code>, <code>order.in_production</code>, <code>order.shipped</code> and <code>order.cancelled</code>. Their envelope is <code>&#123;id, type, created_at, data&#125;</code>. Deduplicate by the <strong>top-level <code>id</code></strong>; <code>data.id</code> is the order ID. Each lifecycle transition has its own event ID; retries preserve it.</p>
       <Code label="Order shipped webhook payload">{pretty(examples.orderEvent)}</Code>
       <p>All <code>order.*</code> events use these <code>data</code> fields: <code>id</code>, <code>cart_id</code>, nullable <code>external_ref</code>, <code>status</code> and nullable <code>shipment</code>. Shipment has the same shape as in the order response. For <code>cart.expired</code>, <code>data.id</code> is the cart ID; there is no <code>cart_id</code>, <code>shipment</code> or order ID field:</p>
