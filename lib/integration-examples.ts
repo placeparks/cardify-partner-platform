@@ -1,6 +1,5 @@
 // Runnable server/terminal examples. All credentials and deployment settings
 // come from the caller's environment, never from this public documentation.
-
 export const integrationExamples = {
   curl: String.raw`#!/usr/bin/env bash
 # Bash, curl and jq. Set API_BASE, TCGP_API_KEY, STORE_ORIGIN,
@@ -123,7 +122,11 @@ while ($cart['status'] === 'validating') {
     $cart = api('GET', '/v1/carts/' . rawurlencode($cart['id']));
 }
 if ($cart['status'] === 'open') {
-    $checkoutUrl = $cart['checkout_url']; // Send this URL only to the owning customer.
+    // Return the complete owned cart. Browser JavaScript opens the live embed.
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+    echo json_encode($cart, JSON_THROW_ON_ERROR);
+    exit;
 } elseif ($cart['status'] === 'converted' && !empty($cart['order_id'])) {
     $order = api('GET', '/v1/orders/' . rawurlencode($cart['order_id']));
 } else {

@@ -1,3 +1,4 @@
+import { documentedMcpEndpoint } from './mcp-documentation'
 import { TERMS_VERSION } from "./manufacturing-contract"
 import { prepaidPaths, prepaidSchemas, prepaidLlms } from './prepaid-documentation'
 
@@ -236,14 +237,14 @@ export function buildOpenApi(config = documentationConfig()) {
 export function buildLlmsText(config = documentationConfig()) {
   return `# TCGPlaytest Partner API
 
-> Server-side card manufacturing integration. Upload directly to TCGPlaytest storage or supply existing image URLs, poll validation, then open checkout inside the partner page with TCGPlaytest.checkout(cart). Only the payment step opens Stripe.
+> Server-side card manufacturing integration. Upload directly to TCGPlaytest storage or supply existing image URLs, poll validation, then use browser JavaScript TCGPlaytest.checkout(cart) for LIVE embedded checkout. PHP returns cart JSON to that browser code. TEST carts open checkout_url as a separate full-page simulator with no Stripe payment.
 
 API base URL: ${config.baseUrl}
 API path version: /v1. OpenAPI document revision is not a new API path version.
 
 ## Public MCP ordering (no customer account or API key)
 - [MCP setup and card previews](${config.baseUrl}/docs/mcp).
-- Remote MCP URL: https://www.tcgplaytest.com/api/mcp on the MAIN website, not the partner API origin. Use www directly to avoid redirects. Transport: Streamable HTTP. Authentication: none. Do not ask the customer to apply for a partnership, create an API key or supply the operator's secrets.
+- Current remote MCP URL: ${documentedMcpEndpoint()} on the commerce website, not the partner API origin. Use this exact URL without redirects. ${documentedMcpEndpoint().startsWith('https://www.tcgplaytest.com/') ? 'Production endpoint.' : 'These examples target a separate test deployment.'} Transport: Streamable HTTP. Authentication: none. Do not ask the customer to apply for a partnership, create an API key or supply the operator's secrets.
 - Platform setup: [ChatGPT](${config.baseUrl}/docs/mcp#mcp--chatgpt), [Claude](${config.baseUrl}/docs/mcp#mcp--claude), [Gemini](${config.baseUrl}/docs/mcp#mcp--gemini), [Codex](${config.baseUrl}/docs/mcp#mcp--codex), [Claude Code](${config.baseUrl}/docs/mcp#mcp--claude-code), [Gemini CLI](${config.baseUrl}/docs/mcp#mcp--gemini-cli), [Cursor](${config.baseUrl}/docs/mcp#mcp--cursor), [OpenAI Responses API](${config.baseUrl}/docs/mcp#mcp--openai-api). Provider accounts, availability and usage charges still apply; steps and official references are in the guide.
 - Verify a new connection by requesting printing options and a 2-card US quote before preparing an order. A chat attachment is not automatically uploaded to MCP: the client must PUT the file bytes or supply a direct HTTPS image URL.
 - MCP-only pricing (mcp-base-per-card-v3): $34.95 covers cards 1-18; cards 19-180 add $0.35 each, 181-504 add $0.30 each, and 505 onward add $0.26 each, including above 1,008. Maximum 10,080 cards (560 sheets) per MCP order, no markup and no rounding later quantities to full sheets for billing. Sheets have 18 physical positions; only requested copies print.
@@ -274,7 +275,8 @@ Earnings = retail subtotal minus printing cost minus actual Stripe processing fe
 
 ## Start here
 - [Developer documentation](${config.baseUrl}/docs): server-rendered topic pages covering setup, exact fields, limits, examples, errors, widget, webhooks and content obligations. Each topic has its own URL and readable HTML.
-- [Going live](${config.baseUrl}/docs/go-live): partner launch steps and platform operator settings. Live Stripe credentials alone do not complete deployment setup; configure the live webhook secrets, live Tax, prepaid enablement and verify fulfillment. Existing schema and live partner keys remain valid.
+- [First order in 10 minutes](${config.baseUrl}/docs/first-order): runnable test-key-to-verified-webhook example, including actual delivery, retry, signature and duplicate checks.
+- [Going live](${config.baseUrl}/docs/go-live): partner launch checklist. Platform flags, migrations and Stripe setup are in the internal engineering operations guide, not the partner checklist.
 - [OpenAPI 3.1 schema](${config.baseUrl}/openapi.json): requests, responses, security and webhook payloads.
 - [Partner dashboard](${config.baseUrl}/dashboard): a human signs in with Google, completes the application, accepts the current partner terms and creates test/live keys. The human also configures the webhook URL and saves its displayed signing secret.
 - [Partner terms](${config.baseUrl}/terms): do not knowingly send unlawful/infringing content; remove and stop forwarding notified content; cooperate on complaints; orders may be refused, held or cancelled and repeat offenders suspended.
