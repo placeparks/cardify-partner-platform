@@ -5,6 +5,7 @@ import { DocsOverview, GoLiveGuide } from '@/components/docs/docs-guides'
 import styles from '@/components/docs/docs.module.css'
 import Link from "next/link"
 import { SandboxGuide } from '@/components/docs/sandbox-guide'
+import { FirstOrderGuide } from '@/components/docs/first-order-guide'
 import { ConnectGuide } from '@/components/docs/connect-guide'
 import { McpGuide } from '@/components/docs/mcp-guide'
 import { PrepaidGuide } from '@/components/prepaid-guide'
@@ -49,12 +50,13 @@ const statusResponse = await fetch(API_BASE + "/v1/carts/" + ownedCartId, {
 const status = await statusResponse.json();
 if (!statusResponse.ok) throw new Error(status.error.message);
 // Relay JSON to your UI. Poll every 3–5 seconds while validating.
-// When open, show checkout on your page with TCGPlaytest.checkout(status).
+// When open: live -> TCGPlaytest.checkout(status); test -> open status.checkout_url as a full page.
 // Stop on failed/expired/blocked/cancelled/converted; show the relevant outcome.`
   const topics: DocsTopic[] = [
     { id:"overview", title:"Overview", group:"Get started", description:"Everything you need to turn artwork into printed cards.", keywords:"introduction getting started API base", content: (
 <DocsOverview baseUrl={config.baseUrl} />
     ) },
+    { id:"first-order", title:"First order in 10 minutes", group:"Get started", description:"A runnable sandbox example from test key to verified webhook delivery.", keywords:"quickstart sandbox first order verified webhook PHP retry", content: <FirstOrderGuide baseUrl={config.baseUrl} /> },
     { id:"mcp", title:"Order with AI · MCP", group:"Get started", description:"Connect ChatGPT, Claude, Gemini or your developer tools, preview your cards and check out without a TCGPlaytest account or customer API key.", keywords:"MCP model context protocol AI assistant remote streamable HTTP no login guest preview ChatGPT OpenAI Claude Gemini Codex Cursor connector setup", content: <McpGuide /> },
     { id:"sandbox", title:"Test checkout & events", group:"Get started", description:"Simulate checkout, verify the order, return to your store and trigger signed test events.", keywords:"sandbox test hosted Connect confirmation webhook production shipment cart clearing", content: <SandboxGuide baseUrl={config.baseUrl} /> },
     { id:"before-you-start", title:"Quickstart & authentication", group:"Get started", description:"Set up your account, protect your API key and make your first integration.", keywords:"Google auth bearer token secret website application account", content: (
@@ -83,7 +85,7 @@ STORE_ORIGIN=https://your-store.example`}</Code>
     <ol className="list-decimal space-y-3 pl-6">
       <li><code>POST /v1/carts</code> returns <strong>202 Accepted</strong>, <code>status: validating</code>, and no checkout URL.</li>
       <li>A separate background worker downloads, checks and applies automatic print bleed to both fronts and backs. Poll <code>GET /v1/carts/&#123;id&#125;</code> every 3–5 seconds, honoring <code>Retry-After</code>. Progress may remain unchanged while a job waits for the worker.</li>
-      <li>When <code>status</code> is <code>open</code>, call <code>TCGPlaytest.checkout(cart)</code> to show checkout on your page. The customer accepts image rights there and continues to Stripe for payment.</li>
+      <li>When a live cart is <code>open</code>, browser JavaScript calls <code>TCGPlaytest.checkout(cart)</code> to embed delivery details; the customer then continues to Stripe outside the frame. For a test cart, open its returned <code>checkout_url</code> as a full-page simulator with no Stripe payment.</li>
       <li>Confirm payment from a signed <code>order.paid</code> webhook or the order API. TCGPlaytest prints from the already-checked files; payment does not trigger another source download.</li>
     </ol>
     <p><strong>Automatic bleed is handled by the API.</strong> Submit finished-card artwork; partners do not need to add bleed. Before checkout opens, TCGPlaytest applies the website’s standard 2 mm auto-bleed around a 63 × 88 mm finished card, using the same mask and corner treatment. Recognized artwork with existing bleed is preserved at 2 mm or cropped from 3 mm to 2 mm, without adding a second margin. A 1500 × 2100 image becomes 1596 × 2196 pixels. The dashboard and production use the prepared file. Optional SHA-256 values must still describe the original submitted bytes. Both source and prepared files remain private, scoped to that cart, and follow its expiry/retention and legal holds.</p>
@@ -102,6 +104,20 @@ STORE_ORIGIN=https://your-store.example`}</Code>
         {label:'PHP',code:integrationExamples.php},
         {label:'Upload with cURL',code:integrationExamples.uploadCurl},
       ]} />
+      <h3>PHP returns JSON; browser JavaScript opens checkout</h3>
+      <p>Serve the PHP example as your authenticated cart endpoint. Save ownership and protect it against CSRF. For a web app, return the validating cart immediately and poll through your server; the blocking example is suited to a worker. Load your personalized widget script before running the browser code below.</p>
+      <Code label="Browser JavaScript after the PHP cart endpoint">{`// Your own authenticated endpoint returns the owned, open cart JSON.
+const response = await fetch('/api/my-cart.php', { credentials: 'same-origin' });
+if (!response.ok) throw new Error('Cart could not be loaded');
+const cart = await response.json();
+if (cart.status !== 'open') throw new Error('Wait for artwork validation');
+if (cart.mode === 'live') {
+  await TCGPlaytest.checkout(cart); // Delivery details embedded; Stripe opens outside.
+} else if (cart.mode === 'test') {
+  window.location.assign(cart.checkout_url); // Separate full-page simulator, no payment.
+} else {
+  throw new Error('Unexpected cart mode');
+}`}</Code>
       <p>Omit backs to use the default; add <code>back_image_url</code> to an item for its reverse face or at the top level for a shared back. Storage PUTs use the returned headers with no partner Authorization header. There is no finalize endpoint. Examples are integration starting points, not complete storefront applications.</p>
     </section>
     ) },
@@ -371,7 +387,7 @@ if (!uploaded.ok) throw new Error("Upload failed; request a fresh link and retry
     <p>An identical POST retry returns the original cart: 202 while validating, otherwise 200. Reusing an idempotency key cannot reopen a failed or expired cart. After an ambiguous network failure, retry with the same key to avoid a duplicate cart.</p>
 </section>
     ) },
-    { id:"go-live", title:"Going live", group:"Resources", description:"Move from sandbox payments to real printing and fulfillment.", keywords:"Stripe credentials keys STRIPE_CREDIT_WEBHOOK_SECRET STRIPE_SECRET_KEY tax prepaid_tax_settings prepaid_disabled PARTNER_PREPAID_ENABLED deployment", content: (
+    { id:"go-live", title:"Going live", group:"Resources", description:"Partner launch checklist: verified orders, allowed origins and live checkout.", keywords:"launch checklist live key website webhook verification", content: (
 <GoLiveGuide baseUrl={config.baseUrl} />
     ) },
     { id:"affiliate", title:"Affiliate codes", group:"Resources", description:"Apply your approved affiliate preference to new carts.", keywords:"discount referral coupons affiliate_code", content: (

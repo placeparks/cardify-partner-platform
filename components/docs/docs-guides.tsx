@@ -1,4 +1,4 @@
-import { ArrowRight, Braces, CheckCircle2, Code2, CreditCard, Layers3, Palette, Rocket, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Braces, Code2, CreditCard, Layers3, Palette, Rocket, ShieldCheck } from 'lucide-react'
 import { CodeExample } from './code-example'
 import styles from './docs.module.css'
 
@@ -8,7 +8,7 @@ export function DocsOverview({ baseUrl }: { baseUrl: string }) {
       <span className={styles.eyebrow}>TCGPlaytest for developers</span>
       <h1>Your card experience.<br /><span>Our printing API.</span></h1>
       <p>Turn finished artwork into cards delivered to your customers. Build on your own website. We handle artwork validation, printing and shipping.</p>
-      <div className={styles.heroLinks}><a href="/docs/before-you-start">Start building <ArrowRight size={15} /></a><a href="/docs/create-cart">Explore the API <ArrowRight size={14} /></a><a href="/docs/mcp">Order with AI · MCP <ArrowRight size={14} /></a></div>
+      <div className={styles.heroLinks}><a href="/docs/first-order">First order in 10 minutes <ArrowRight size={15} /></a><a href="/docs/create-cart">Explore the API <ArrowRight size={14} /></a><a href="/docs/mcp">Order with AI · MCP <ArrowRight size={14} /></a></div>
     </div>
     <h2>From artwork to checkout</h2>
     <div className={styles.quickGrid}>
@@ -47,47 +47,21 @@ export function DocsOverview({ baseUrl }: { baseUrl: string }) {
 
 export function GoLiveGuide({ baseUrl }: { baseUrl: string }) {
   return <>
-    <div className={styles.callout}><CheckCircle2 size={19} /><p><strong>The same integration runs live.</strong> Stripe credentials select the payment environment automatically. Your existing <code>tcgp_live_</code> partner API key stays valid. With the current migrations applied, there is no database switch or extra mode setting.</p></div>
-    <h2>For partners integrating the API</h2>
+    <h2>Partner launch checklist</h2>
+    <p>Use this checklist for your storefront. Platform deployment, database and Stripe account setup are handled by TCGPlaytest operations.</p>
     <ol className={styles.checklist}>
-      <li><strong>Use your live partner API key</strong><p>Keep <code>TCGP_API_KEY</code> in your server environment. A <code>tcgp_test_</code> key opens the <a href="/docs/sandbox">complete checkout simulator</a>. Stripe credentials belong to the platform; partners do not need Stripe Connect to use this API.</p></li>
-      <li><strong>Register your production website</strong><p>Your HTTPS <code>return_url</code> must match your registered website origin exactly. Update your application&apos;s <code>STORE_ORIGIN</code> if your domain changes. Add any extra widget or checkout embedding origins in the dashboard.</p></li>
-      <li><strong>Confirm orders on your server</strong><p>Configure your Live order webhook in the dashboard, verify signatures and deduplicate events. Your custom success page must verify the saved cart and order. A browser return is not proof of payment.</p></li>
-      <li><strong>Fund printing, if you use credit</strong><p>Accept the prepaid terms and buy real printing credit. Test payments never fund the live balance. Eligible API and standalone widget carts use enough credit for the whole printing cost; otherwise the customer pays the normal full checkout. Test-mode widget simulations do not spend credit.</p></li>
+      <li><strong>Complete one verified sandbox order</strong><p>Follow <a href="/docs/first-order">First order in 10 minutes</a>. Confirm that your Test webhook verifies the signature, stores the expected order state and handles retries without clearing purchased items twice. A queued event or browser redirect is not proof.</p></li>
+      <li><strong>Register the exact website origins</strong><p>Save your production HTTPS website in the dashboard. Add any extra widget origins separately. Your return URL and webhook URL must use the registered website origin. Confirm live delivery details open on an allowed origin and fail on an unlisted origin.</p></li>
+      <li><strong>Use the live key on your server</strong><p>Create a live API key from the production dashboard and set your server API base to <code>{baseUrl}</code>. Never put the secret key in browser JavaScript. The standalone widget uses your public partner identifier with <code>data-mode="live"</code>.</p></li>
+      <li><strong>Configure the Live order webhook</strong><p>Live and Test webhook settings and secrets are separate. Verify raw-body signatures, save event IDs durably and process each event once. Reconcile with the order API when events arrive late or out of order.</p></li>
+      <li><strong>Check the storefront handoff</strong><p>Browser JavaScript calls <code>TCGPlaytest.checkout(cart)</code> for live delivery details. Stripe opens outside the iframe. Verify the saved cart and order on your server before showing payment confirmation or removing purchased quantities; preserve later cart edits.</p></li>
+      <li><strong>Check optional funding and payouts</strong><p>Ordinary hosted checkout does not require Stripe Connect. If you use printing credit, accept its terms and fund the live balance. If you use Connect payouts, complete onboarding and confirm that your account is ready.</p></li>
+      <li><strong>Arrange a controlled launch check</strong><p>The simulator does not verify actual payment totals, discounts, shipping charges, tax or payouts. Coordinate a Stripe test-mode check and final launch approval with TCGPlaytest before opening sales. Keep the tested order references and webhook evidence.</p></li>
     </ol>
-    <h2>For the platform operator</h2>
-    <p>These settings belong to the partner platform and commerce deployments. Partners using the API do not need to configure them.</p>
-    <ol className={styles.checklist}>
-      <li><strong>Switch both deployments to the same live Stripe account</strong><p>Set <code>STRIPE_SECRET_KEY</code> to the live secret on both apps. Replace any Stripe publishable keys used by a frontend with their matching live keys. Finish or reconcile pending sandbox checkouts before switching; keep separate deployments if you need both environments active.</p></li>
-      <li><strong>Use each live webhook endpoint&apos;s signing secret</strong><p>On the partner platform, set <code>STRIPE_CREDIT_WEBHOOK_SECRET</code> for <code>/api/stripe/credit-webhook</code>. On commerce, set <code>STRIPE_WEBHOOK_SECRET</code> for <code>/api/webhook</code>. These are separate Stripe endpoints with separate secrets. Neither is the partner order webhook secret shown in the dashboard.</p></li>
-      <li><strong>Complete live Stripe Tax setup</strong><p>Configure the live account&apos;s tax settings, including its business address and relevant registrations. Live prepaid quotes use Stripe Tax and stop if tax calculation fails. Only prepaid quotes using test credentials skip Tax and return zero tax; this is not a tax exemption for live orders.</p><p>Restore any testing-only comments that disabled <code>automatic_tax</code> in ordinary commerce checkout before going live. The prepaid shipping checkout already uses its saved tax quote; do not add automatic tax there again.</p></li>
-      <li><strong>Keep the platform connected and enabled</strong><p>Keep <code>PARTNER_PREPAID_ENABLED=true</code> on both apps and <code>PARTNER_LIVE_ENABLED=true</code> on the partner platform. Verify the HTTPS API and checkout origins, shared internal secret, existing storage/database migrations and scheduled validation/reconciliation workers. No new SQL is needed just to change Stripe credentials.</p></li>
-      <li><strong>Redeploy and verify the complete flow</strong><p>Confirm webhook delivery and balance reconciliation, credit-funded and normal checkout, the partner success redirect, and manufacturing order creation before taking customer orders. Live keys alone do not verify those connections.</p></li>
-    </ol>
-    <h2>Credit webhook events</h2>
-    <p>Create the live Stripe endpoint at <code>{baseUrl}/api/stripe/credit-webhook</code>. Enable the events handled by the credit receiver:</p>
-    <CodeExample label="Stripe credit webhook · event selection">{`checkout.session.completed
-checkout.session.async_payment_succeeded
-checkout.session.expired
-charge.refunded
-refund.created
-refund.updated
-refund.failed
-charge.dispute.created
-charge.dispute.updated
-charge.dispute.closed
-charge.dispute.funds_withdrawn
-charge.dispute.funds_reinstated`}</CodeExample>
-    <p>Keep the normal commerce payment webhook configured separately. Stripe verifies payments; the platform then updates the balance or order and sends signed partner lifecycle events.</p>
-    <h2>What stays the same</h2>
-    <p>Your application code, cart endpoints, existing live partner key, registered branding and current database schema can stay the same. Existing real balances remain intact; sandbox balances stay isolated. Buy real credit for real printing.</p>
-    <h2>Resolve common launch errors</h2>
-    <ul>
-      <li><code>prepaid_disabled</code>: enable <code>PARTNER_PREPAID_ENABLED=true</code> on the commerce deployment and redeploy. Check the partner deployment too.</li>
-      <li><code>prepaid_tax_settings</code>: finish live Stripe Tax setup in the Stripe account used by commerce. A missing tax configuration must not silently turn into a zero-tax live order.</li>
-      <li><code>prepaid_stripe_mode_mismatch</code>: both deployments must use credentials from the same Stripe environment.</li>
-      <li><code>prepaid_terms_required</code>: the partner needs to accept the current prepaid terms in their dashboard.</li>
-    </ul>
-    <p>Related Stripe documentation: <a href="https://docs.stripe.com/keys#switch-to-live-mode" target="_blank" rel="noreferrer">switching API keys</a>, <a href="https://docs.stripe.com/webhooks" target="_blank" rel="noreferrer">webhook endpoints</a>, and <a href="https://docs.stripe.com/tax/settings-api" target="_blank" rel="noreferrer">Tax settings</a>.</p>
+    <h2>Common mistakes</h2>
+    <div className={styles.callout}><p><strong>Test is not a payment rehearsal.</strong> Hosted/Connect sandbox checkout simulates payment and fulfillment; it never charges, prints or ships.</p></div>
+    <div className={styles.callout}><p><strong>Staging is a different origin.</strong> Allow it explicitly when embedding, and use keys and webhook settings from the matching partner dashboard.</p></div>
+    <div className={styles.callout}><p><strong>A configuration error needs operator help.</strong> For a 503, missing delivery details, exhausted webhook retries or a payment-mode error, send support the timestamp, cart ID and request ID. Do not send API keys or webhook secrets.</p></div>
+    <p>References: <a href="/docs/embedded-checkout">embedded checkout</a>, <a href="/docs/webhooks">webhooks</a>, <a href="/docs/success-page">verified success pages</a>.</p>
   </>
 }

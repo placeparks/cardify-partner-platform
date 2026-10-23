@@ -2,6 +2,7 @@ import { CodeExample } from './code-example'
 
 export function SandboxGuide({ baseUrl }: { baseUrl: string }) {
   return <>
+    <p>New integration? Start with <a href="/docs/first-order">First order in 10 minutes</a> for a runnable test-key-to-verified-webhook example.</p>
     <h2>Test an order from checkout to shipment</h2>
     <p>Use a <code>tcgp_test_</code> API key or a widget with <code>data-mode="test"</code>. Artwork validation is real; checkout and fulfillment are simulated. This works even when the platform uses live Stripe credentials. No charge, printing, shipping, credit deduction or Connect transfer occurs.</p>
     <ol>

@@ -1,22 +1,26 @@
 import { CodeExample } from './code-example'
 import McpPricingCalculator from '../McpPricingCalculator'
 
-const endpoint = 'https://www.tcgplaytest.com/api/mcp'
+import { documentedMcpEndpoint } from '@/lib/mcp-documentation'
 
 export function McpGuide() {
+  const endpoint = documentedMcpEndpoint()
+  const testing = !endpoint.startsWith('https://www.tcgplaytest.com/')
   return <section className="space-y-4">
+    {testing && <p><strong>These examples target a test deployment.</strong> Treat checkout as a test only after confirming that the payment page is in test mode. For production, use <code>https://www.tcgplaytest.com/api/mcp</code>.</p>}
     <p>Ask an AI assistant to prepare printed cards, review a private preview, then pay through guest checkout. You do not need a TCGPlaytest account, partner application or API key to use the public MCP server.</p>
 
     <h2>Connect your assistant</h2>
     <ol className="list-decimal space-y-2 pl-6">
       <li>Open the server or connector settings in a client that supports remote MCP.</li>
-      <li>Add <code>{endpoint}</code> as the server URL. Choose <strong>Streamable HTTP</strong> if asked for the transport.</li>
+      <li>Add <code data-mcp-endpoint>{endpoint}</code> as the server URL. Choose <strong>Streamable HTTP</strong> if asked for the transport.</li>
       <li>Choose <strong>No authentication</strong>. Leave the API key and Authorization header empty.</li>
     </ol>
     <p>Your assistant&apos;s own account or plan may affect whether it supports custom MCP servers. Opening the endpoint in a browser returns HTTP 405 because it is a tool endpoint, not a webpage.</p>
     <CodeExample label="MCP server URL">{endpoint}</CodeExample>
-    <p>Use the <strong>www</strong> URL above directly; some clients do not follow redirects from the non-www address. Your AI provider&apos;s account, plan and usage charges are separate from TCGPlaytest checkout.</p>
+    <p>Use the exact URL above directly; some clients do not follow redirects. The production URL includes <code>www</code>. Your AI provider&apos;s account, plan and usage charges are separate from TCGPlaytest checkout.</p>
 
+    <p>Connection verification: initialize → initialized notification → tools/list. This server currently uses stateless HTTP; if a future version issues a session header, clients must return it on subsequent requests. Browser-origin rejection (403) is distinct from configuration failure (503). If connection fails, send support the endpoint, time and response request ID; keep authentication set to None and do not supply the operator&apos;s key.</p>
     <h2 id="mcp--platforms">Choose your platform</h2>
     <p>Setup steps checked against official platform documentation on October 20, 2026. Menus and availability can vary by account or workspace policy.</p>
     <nav aria-label="MCP platform setup" className="flex flex-wrap gap-x-5 gap-y-2">
