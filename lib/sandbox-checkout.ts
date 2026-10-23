@@ -1,5 +1,6 @@
 import { ApiError, hasPartnerTerms, partnerReturnUrl } from './manufacturing-contract'
 import { checked, digest } from './partner-api'
+import { receiveSandboxDemo } from './sandbox-receiver'
 
 export const SANDBOX_ORDER_ID = /^test_order_[a-f0-9]{32}$/
 const unavailable = () => new ApiError(404, 'test_checkout_unavailable', 'This test checkout is unavailable. Create a new test cart if it expired.')
@@ -27,6 +28,7 @@ export function publicSandboxOrder(order: any) {
     created_at: order.created_at, updated_at: order.updated_at, external_ref: order.external_ref,
     card_count: order.card_count, items: order.items, settlement: order.settlement,
     ...(order.retail_amount_cents != null ? { retail_amount_cents: order.retail_amount_cents } : {}),
+    demo_webhook: order.demo_webhook ?? null,
     mode: 'test', simulated: true }
 }
 
@@ -74,7 +76,7 @@ export async function simulateOrder(db: any, partnerId: string, cartId: string, 
     throw new ApiError(code, `sandbox_${value.error}`, message)
   }
   if (!value?.id || !SANDBOX_ORDER_ID.test(value.id)) throw new Error('Invalid sandbox response')
-  return publicSandboxOrder(value)
+  return receiveSandboxDemo(db, partnerId, publicSandboxOrder(value), status)
 }
 
 export function testReturnUrl(cart: any, order: any) {
