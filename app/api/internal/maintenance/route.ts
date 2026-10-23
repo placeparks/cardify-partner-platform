@@ -43,16 +43,29 @@ async function maintain() {
   for (const event of events) {
     if (Date.now()-started > 45000) break
     const settings = checked(await db.from("partner_webhook_settings").select("*").eq("partner_id",event.partner_id).eq("mode",event.mode).maybeSingle())
-    if (!settings) continue
+    if (!settings) {
+      result.failures++
+      console.error(JSON.stringify({event:"partner_webhook_delivery",event_id:event.id,mode:event.mode,reason:"receiver_not_configured",attempt:event.attempts}))
+      continue
+    }
     let delivered = false
+    let status: number | null = null
+    let reason = "receiver_request_failed"
     try {
       const raw = JSON.stringify(event.payload), timestamp = Math.floor(Date.now()/1000)
       const signature = createHmac("sha256",decrypt(settings.secret_ciphertext)).update(`${timestamp}.${raw}`).digest("hex")
       const response = await safeRequest(settings.url,{method:"POST",body:raw,headers:{"Content-Type":"application/json","TCGP-Signature":`t=${timestamp},v1=${signature}`},maxBytes:64_000})
       delivered = response.status >= 200 && response.status < 300
-    } catch { result.failures++ }
+      status = response.status
+      reason = delivered ? "acknowledged" : "receiver_non_2xx"
+    } catch { /* No URLs, request bodies, secrets or raw exception messages in logs. */ }
+    if (!delivered) result.failures++
     checked(await db.from("partner_webhook_events").update({attempts:event.attempts+1,delivered_at:delivered?now:null,next_attempt_at:new Date(Date.now()+Math.min(86400,30*2**event.attempts)*1000).toISOString()}).eq("id",event.id))
     if (delivered) result.delivered++
+    const evidence = JSON.stringify({event:"partner_webhook_delivery",event_id:event.id,mode:event.mode,
+      attempt:event.attempts+1,status,reason,exhausted:!delivered && event.attempts+1>=12})
+    if (delivered) console.info(evidence)
+    else console.error(evidence)
   }
   checked(await db.from("partner_api_rate_windows").delete().lt("window_at",new Date(Date.now()-86400_000).toISOString()))
   let uploadsDeleted = 0
