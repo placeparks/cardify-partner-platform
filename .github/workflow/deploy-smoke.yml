@@ -1,0 +1,85 @@
+name: Deployment readiness
+on:
+  deployment_status:
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+concurrency:
+  group: deployment-readiness-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  smoke:
+    # Configure the Vercel environment name (typically Production) and a fixed GitHub environment.
+    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && (vars.SMOKE_DEPLOY_ENVIRONMENT == '' || github.event.deployment.environment == vars.SMOKE_DEPLOY_ENVIRONMENT))
+    environment: ${{ vars.SMOKE_GITHUB_ENVIRONMENT }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Never execute code from an untrusted deployment ref with test credentials.
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: scripts/deploy-smoke/package-lock.json
+      - name: Require readiness configuration
+        run: |
+          node -e "for (const name of ['DEPLOY_ENV','FIXED_ENV','APP','ALERT']) if (!process.env[name]) throw Error(name + ' is required'); if (!['commerce','partner'].includes(process.env.APP)) throw Error('SMOKE_APP must be commerce or partner')"
+        env:
+          DEPLOY_ENV: ${{ vars.SMOKE_DEPLOY_ENVIRONMENT }}
+          FIXED_ENV: ${{ vars.SMOKE_GITHUB_ENVIRONMENT }}
+          APP: ${{ vars.SMOKE_APP }}
+          ALERT: ${{ secrets.SMOKE_ALERT_WEBHOOK_URL }}
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: scripts/deploy-smoke
+      - run: npm test
+        working-directory: scripts/deploy-smoke
+      - name: Check deployed services
+        working-directory: scripts/deploy-smoke
+        run: node run.mjs
+        env:
+          SMOKE_COMMERCE_ORIGIN: ${{ vars.SMOKE_COMMERCE_ORIGIN }}
+          SMOKE_PARTNER_ORIGIN: ${{ vars.SMOKE_PARTNER_ORIGIN }}
+          SMOKE_MCP_URL: ${{ vars.SMOKE_MCP_URL }}
+          SMOKE_MCP_BROWSER_ORIGINS: ${{ vars.SMOKE_MCP_BROWSER_ORIGINS }}
+          SMOKE_ALLOWED_ORIGIN: ${{ vars.SMOKE_ALLOWED_ORIGIN }}
+          SMOKE_WIDGET_PARTNER_KEY: ${{ vars.SMOKE_WIDGET_PARTNER_KEY }}
+          SMOKE_RECEIVER_ORIGIN: ${{ vars.SMOKE_RECEIVER_ORIGIN }}
+          SMOKE_TEST_API_KEY: ${{ secrets.SMOKE_TEST_API_KEY }}
+          SMOKE_RECEIVER_TOKEN: ${{ secrets.SMOKE_RECEIVER_TOKEN }}
+          SMOKE_ALERT_WEBHOOK_URL: ${{ secrets.SMOKE_ALERT_WEBHOOK_URL }}
+          SMOKE_EXPECT_COMMERCE_SHA: ${{ vars.SMOKE_APP == 'commerce' && github.event.deployment.sha || '' }}
+          SMOKE_EXPECT_PARTNER_SHA: ${{ vars.SMOKE_APP == 'partner' && github.event.deployment.sha || '' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deployment-readiness-${{ github.run_id }}
+          path: scripts/deploy-smoke/smoke-results/
+      - name: Alert on any failure (including setup)
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          ALERT_URL: ${{ secrets.SMOKE_ALERT_WEBHOOK_URL }}
+        with:
+          script: |
+            if (!process.env.ALERT_URL) { core.setFailed('Missing alert destination; inspect the failed readiness run.'); return; }
+            const url = new URL(process.env.ALERT_URL);
+            if (url.protocol !== 'https:') { core.setFailed('Alert destination must use HTTPS'); return; }
+            const response = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({text:`TCGPlaytest deployment readiness FAILED. Stop rollout. ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`}),
+              redirect:'error', signal:AbortSignal.timeout(15000)});
+            if (!response.ok) core.setFailed('Failure alert delivery was not acknowledged');
+      - name: Publish readiness status
+        if: always() && github.event.deployment.sha != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              ...context.repo, sha: context.payload.deployment.sha,
+              state: '${{ job.status }}' === 'success' ? 'success' : 'failure',
+              context: 'deployment-readiness', description: 'MCP, embed and receiver delivery checks',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
