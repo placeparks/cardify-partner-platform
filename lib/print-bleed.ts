@@ -5,7 +5,7 @@ import { ApiError } from "@/lib/manufacturing-contract"
 
 // Same geometry, mask donor search and corner repair as the main site's
 // utils/imageProcessing.ts. Runs once per unique source URL in the cart worker.
-export const PRINT_PROCESSING_VERSION = "auto-bleed-2mm-v1"
+export const PRINT_PROCESSING_VERSION = "auto-bleed-2mm-v2"
 const BLEED_SIZE_TOLERANCE_PX = 10
 const yieldFrame = () => new Promise<void>(resolve => setImmediate(resolve))
 let maskPromise: Promise<Buffer> | undefined
@@ -51,14 +51,14 @@ function maskAt(width: number, height: number) {
 
 export function detectExistingBleed(width: number, height: number): boolean {
   const standardSizes = [
+    // Reported client format needs generated bleed, including +/-10px exports.
+    [1626, 2250],
     // Near the finished 63:88 aspect ratio; apply bleed rather than crop it.
     [3288, 4604],
     [750, 1050], [1156, 1618], [1500, 2100], [3000, 4200],
     [600, 838], [2976, 4157], [1488, 2079], [744, 1039],
   ]
   const preBledSizes = [
-    // Client-supplied artwork already includes bleed.
-    [1626, 2250],
     // 300-DPI 750x1050 artwork with approximately 3 mm bleed per edge.
     [822, 1122],
     [1088, 1480], [1162, 1632], [1262, 1714], [1632, 2220],
@@ -71,11 +71,8 @@ export function detectExistingBleed(width: number, height: number): boolean {
 
   if (standardSizes.some(matches)) return false
   if (preBledSizes.some(matches)) return true
-  // Exact exceptions for the supplied resizes of the client's pre-bled image,
-  // including the 1153x1600 WhatsApp attachment.
-  // Applying the table's +/-10px tolerance here also captures 1146x1600
-  // finished-card artwork, incorrectly treating its border as existing bleed.
-  if ((width === 1153 || width === 1156) && height === 1600) return true
+  // Supplied resizes of the reported artwork also need generated bleed.
+  if ((width === 1153 || width === 1156) && height === 1600) return false
   if (width < 1001) return false
 
   const ratio = width / height
