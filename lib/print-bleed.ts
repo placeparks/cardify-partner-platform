@@ -5,7 +5,7 @@ import { ApiError } from "@/lib/manufacturing-contract"
 
 // Same geometry, mask donor search and corner repair as the main site's
 // utils/imageProcessing.ts. Runs once per unique source URL in the cart worker.
-export const PRINT_PROCESSING_VERSION = "auto-bleed-2mm-v2"
+export const PRINT_PROCESSING_VERSION = "auto-bleed-2mm-v3"
 const BLEED_SIZE_TOLERANCE_PX = 10
 const yieldFrame = () => new Promise<void>(resolve => setImmediate(resolve))
 let maskPromise: Promise<Buffer> | undefined
@@ -49,7 +49,7 @@ function maskAt(width: number, height: number) {
   return pending
 }
 
-export function detectExistingBleed(width: number, height: number): boolean {
+function getKnownSourceBleedMm(width: number, height: number): 0 | 2 | 3 | null {
   const standardSizes = [
     // Reported client format needs generated bleed, including +/-10px exports.
     [1626, 2250],
@@ -58,10 +58,12 @@ export function detectExistingBleed(width: number, height: number): boolean {
     [750, 1050], [1156, 1618], [1500, 2100], [3000, 4200],
     [600, 838], [2976, 4157], [1488, 2079], [744, 1039],
   ]
-  const preBledSizes = [
+  // Keep the source amount with the matched format. Re-inferring it from
+  // each tolerated size can switch a 3mm format to 2mm within +/-10px.
+  const threeMmBleedSizes = [
     // 300-DPI 750x1050 artwork with approximately 3 mm bleed per edge.
     [822, 1122],
-    [1088, 1480], [1162, 1632], [1262, 1714], [1632, 2220],
+    [1088, 1480], [1262, 1714], [1632, 2220],
     [1650, 2250], [2192, 2992], [2187, 2975], [2176, 2960],
     [3264, 4440], [3276, 4460],
   ]
@@ -69,10 +71,20 @@ export function detectExistingBleed(width: number, height: number): boolean {
     Math.abs(width - targetWidth) <= BLEED_SIZE_TOLERANCE_PX
       && Math.abs(height - targetHeight) <= BLEED_SIZE_TOLERANCE_PX
 
-  if (standardSizes.some(matches)) return false
-  if (preBledSizes.some(matches)) return true
+  if (standardSizes.some(matches)) return 0
+  if (threeMmBleedSizes.some(matches)) return 3
+  // Legacy entry: retain its existing 2mm behavior pending source-template
+  // confirmation. Its tolerance overlaps 1156x1618; finished-card matches
+  // retain precedence so this audit does not newly crop those uploads.
+  if (matches([1162, 1632])) return 2
   // Supplied resizes of the reported artwork also need generated bleed.
-  if ((width === 1153 || width === 1156) && height === 1600) return false
+  if ((width === 1153 || width === 1156) && height === 1600) return 0
+  return null
+}
+
+export function detectExistingBleed(width: number, height: number): boolean {
+  const knownBleedMm = getKnownSourceBleedMm(width, height)
+  if (knownBleedMm !== null) return knownBleedMm > 0
   if (width < 1001) return false
 
   const ratio = width / height
@@ -80,14 +92,14 @@ export function detectExistingBleed(width: number, height: number): boolean {
 }
 
 function inferExistingBleedMm(width: number, height: number): number {
+  const knownBleedMm = getKnownSourceBleedMm(width, height)
+  if (knownBleedMm !== null && knownBleedMm > 0) return knownBleedMm
   const ratio = width / height
   const twoMmRatio = 67 / 92
   const threeMmRatio = 69 / 94
 
-  // Existing-bleed XML/print-service artwork commonly uses 69x94 mm.
-  // Infer its source bleed from geometry so every later reprocessing path
-  // (borders, trim, mode changes, and checkout preparation) preserves the
-  // same final 2 mm target instead of silently treating 3 mm as 2 mm.
+  // Retain the geometric fallback for unmatched images classified as pre-bled.
+  // Known matrix formats use the source amount above.
   return Math.abs(ratio - threeMmRatio) < Math.abs(ratio - twoMmRatio) ? 3 : 2
 }
 
