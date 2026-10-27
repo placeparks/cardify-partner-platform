@@ -71,10 +71,11 @@ export function detectExistingBleed(width: number, height: number): boolean {
 
   if (standardSizes.some(matches)) return false
   if (preBledSizes.some(matches)) return true
-  // Exact exception for the supplied resize of the client's pre-bled image.
+  // Exact exceptions for the supplied resizes of the client's pre-bled image,
+  // including the 1153x1600 WhatsApp attachment.
   // Applying the table's +/-10px tolerance here also captures 1146x1600
   // finished-card artwork, incorrectly treating its border as existing bleed.
-  if (width === 1156 && height === 1600) return true
+  if ((width === 1153 || width === 1156) && height === 1600) return true
   if (width < 1001) return false
 
   const ratio = width / height
