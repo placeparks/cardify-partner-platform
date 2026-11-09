@@ -32,11 +32,12 @@ export default function McpPricingCalculator() {
         </label>)}</fieldset>
         <label className={styles.quantityLabel} htmlFor={`${id}-quantity`}>Cards in the order</label>
         <div className={styles.quantity}>
-          <input aria-label="Adjust card quantity" type="range" min="1" max={10000} value={quote ? Math.min(quantity, 10000) : 1} onChange={e => change(e.target.value)} />
+          <input aria-label="Adjust card quantity" type="range" min="1" max={MCP_MAX_CARDS} value={quote ? quantity : 1} onChange={e => change(e.target.value)} />
           <input id={`${id}-quantity`} aria-describedby={`${id}-hint`} aria-invalid={!quote} type="number" min="1" max={MCP_MAX_CARDS} step="1" value={input} onChange={e => change(e.target.value)} />
         </div>
-        <p id={`${id}-hint`} className={styles.hint}>Maximum 10,080 cards (560 sheets) per MCP order.</p>
-        {!quote && <p role="alert">Enter a whole number from 1 to 10,080 cards.</p>}
+        <p id={`${id}-hint`} className={styles.hint}>Maximum 10,000 cards per MCP order (556 sheets, last partly filled).</p>
+        <p className={styles.hint}>1–180 cards: 35¢ each. From 181 cards: 30¢ each. From 250 cards onward: 26¢ each. The rate for your order quantity applies to every card, with a $34.95 minimum card subtotal.</p>
+        {!quote && <p role="alert">Enter a whole number from 1 to 10,000 cards.</p>}
         {quote && <>
           <div className={styles.total} aria-live="polite" aria-atomic="true"><strong>{money(quote.estimated_total_before_tax_cents)}</strong><span>Order total with {destination === 'Worldwide' ? 'international' : destination} shipping, before tax and discounts</span></div>
           <dl className={styles.breakdown}>
@@ -47,7 +48,7 @@ export default function McpPricingCalculator() {
             <div><dt>Shipping · {destination}, {bandLabel} cards</dt><dd>{money(quote.shipping_cents)}</dd></div>
             <div><dt>Average per card, excluding shipping</dt><dd>{money(quote.average_card_price_cents)}</dd></div>
           </dl>
-          <p className={styles.nudge}>{quantity === MCP_MAX_CARDS ? 'Maximum order: 10,080 cards (560 sheets).' : quote.savings_message || `With one more card, the order total is ${money(nextQuote!.estimated_total_before_tax_cents)} before tax.${nextShipping ? ` Shipping steps up at ${nextShipping.toLocaleString()} cards.` : ''}`}</p>
+          <p className={styles.nudge}>{quantity === MCP_MAX_CARDS ? 'Maximum order: 10,000 cards (556 sheets).' : quote.savings_message || `With one more card, the order total is ${money(nextQuote!.estimated_total_before_tax_cents)} before tax.${nextShipping ? ` Shipping steps up at ${nextShipping.toLocaleString()} cards.` : ''}`}</p>
         </>}
       </div>
       {quote && <div className={styles.sheetPanel}>
@@ -74,7 +75,7 @@ export default function McpPricingCalculator() {
     <div className={styles.notes}>
       <p>Cards will be delivered cut to standard trading card size with rounded corners</p>
       <p>Price is set based on demand, shipping rates, and material availability/cost</p>
-      <p>Orders of 1–180 cards use 35¢ each; 181–249 use 30¢ each; 250–10,080 use 26¢ each. The selected rate applies to every card. Only requested copies are printed. Discounts cannot reduce the card price below $34.95. Worldwide means supported shipping countries; final tax and total are confirmed at checkout.</p>
+      <p>Orders of 1–180 cards use 35¢ each; 181–249 use 30¢ each; 250–10,000 use 26¢ each. The selected rate applies to every card. Only requested copies are printed. Discounts cannot reduce the card price below $34.95. Worldwide means supported shipping countries; final tax and total are confirmed at checkout.</p>
     </div>
   </section>
 }
