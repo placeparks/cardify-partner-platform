@@ -18,15 +18,15 @@ export class McpQuantityError extends Error {
   constructor() { super('MCP orders are limited to 10,080 cards (560 sheets). Reduce the order quantity before checkout.') }
 }
 
-// MCP-only policy. Marginal rates apply to additional cards, not whole sheets.
-export const MCP_PRICING_VERSION = 'mcp-base-per-card-v3'
+// MCP-only policy. The quantity tier applies to every card, with a subtotal floor.
+export const MCP_PRICING_VERSION = 'mcp-volume-per-card-v4'
 export const MCP_PRICING = {
   model: MCP_PRICING_VERSION, currency: 'USD', cards_per_sheet: 18, max_cards: MCP_MAX_CARDS, shipping_tiers: MCP_SHIPPING_TIERS,
   minimum_cards_subtotal_cents: 3495,
-  additional_card_tiers: [
-    { from: 19, through: 180, cents: 35 },
-    { from: 181, through: 504, cents: 30 },
-    { from: 505, through: null, cents: 26 },
+  quantity_tiers: [
+    { from: 1, through: 180, cents: 35 },
+    { from: 181, through: 249, cents: 30 },
+    { from: 250, through: null, cents: 26 },
   ],
 } as const
 
@@ -34,23 +34,23 @@ export function mcpCardPricing(quantity: number, requestedDiscountCents = 0) {
   if (!Number.isSafeInteger(quantity) || quantity < 1) throw new Error('MCP quantity must be a positive whole number.')
   if (quantity > MCP_MAX_CARDS) throw new McpQuantityError()
   if (!Number.isSafeInteger(requestedDiscountCents) || requestedDiscountCents < 0) throw new Error('Invalid MCP discount.')
-  const bands = MCP_PRICING.additional_card_tiers.map(tier => {
-    const cards = Math.max(0, Math.min(quantity, tier.through ?? quantity) - tier.from + 1)
-    return { ...tier, cards, subtotal_cents: cards * tier.cents }
-  })
-  const subtotal = 3495 + bands.reduce((sum, band) => sum + band.subtotal_cents, 0)
+  const tier = MCP_PRICING.quantity_tiers.find(tier => quantity >= tier.from && (tier.through === null || quantity <= tier.through))!
+  const bands = [{ ...tier, cards: quantity, subtotal_cents: quantity * tier.cents }]
+  const minimum = MCP_PRICING.minimum_cards_subtotal_cents
+  const subtotal = Math.max(minimum, quantity * tier.cents)
+  const included = Math.max(quantity, Math.min(tier.through ?? MCP_MAX_CARDS, Math.floor(minimum / tier.cents)))
   // Reject numeric overflow rather than returning rounded financial amounts.
   if (!Number.isSafeInteger(subtotal)) throw new Error('Quantity exceeds supported numeric precision.')
-  const discount = Math.min(requestedDiscountCents, subtotal - 3495)
+  const discount = Math.min(requestedDiscountCents, subtotal - minimum)
   const sheets = Math.ceil(quantity / 18)
   return {
-    pricing_model: MCP_PRICING_VERSION, quantity, sheets, billable_cards: Math.max(18, quantity),
+    pricing_model: MCP_PRICING_VERSION, quantity, sheets, billable_cards: quantity, unit_price_cents: tier.cents, minimum_adjustment_cents: subtotal - quantity * tier.cents,
     cards_subtotal_cents: subtotal, discount_cents: discount, bands,
-    cards_total_cents: subtotal - discount, minimum_after_discount_cents: 3495,
+    cards_total_cents: subtotal - discount, minimum_after_discount_cents: minimum,
     average_card_price_cents: Math.round(subtotal / quantity),
     extra_cards_in_current_sheet: (18 - quantity % 18) % 18,
-    extra_cards_at_same_printing_price: Math.max(0, 18 - quantity),
-    cards_included_at_same_printing_price: Math.max(18, quantity),
+    extra_cards_at_same_printing_price: included - quantity,
+    cards_included_at_same_printing_price: included,
   }
 }
 
@@ -75,7 +75,7 @@ export function mcpShippingCents(country: string, quantity: number) {
 
 export function mcpSavingsMessage(quantity: number) {
   const extra = mcpCardPricing(quantity).extra_cards_at_same_printing_price
-  return extra ? `You can still order ${extra} more card${extra === 1 ? '' : 's'} for no extra charge! The $34.95 base covers up to 18 cards. Ask your assistant to update the quantity before checkout.` : null
+  return extra ? `You can still order ${extra} more card${extra === 1 ? '' : 's'} for no extra charge! The $34.95 minimum covers up to 99 cards at 35¢ each. Ask your assistant to update the quantity before checkout.` : null
 }
 
 export function mcpQuote(quantity: number, country: string) {
@@ -88,7 +88,7 @@ export function mcpQuote(quantity: number, country: string) {
     estimated_total_before_tax_cents: total,
     extra_cards_at_same_total_before_tax: price.extra_cards_at_same_printing_price,
     savings_message: mcpSavingsMessage(quantity), estimate_only: true,
-    note: 'MCP pricing: $34.95 covers cards 1–18; cards 19–180 add $0.35 each, 181–504 add $0.30 each, and 505 onward add $0.26 each. Maximum 10,080 cards (560 sheets) per MCP order. MCP shipping uses separate destination and quantity bands. Discounts cannot reduce cards below $34.95. Tax is confirmed at checkout.',
+    note: 'MCP pricing uses one rate for every card: 35¢ each for orders of 1–180 cards, 30¢ each for 181–249, and 26¢ each for 250–10,080. The card subtotal is at least $34.95; this minimum is not added to the per-card total. Maximum 10,080 cards (560 sheets). Shipping is separate. Discounts cannot reduce cards below $34.95. Tax is confirmed at checkout.',
   }
 }
 
