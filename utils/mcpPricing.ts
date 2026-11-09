@@ -9,13 +9,13 @@ export const MCP_SHIPPING_TIERS = [
   { through: 3024, US: 1895, CA: 4495, INTL: 10495 },
   { through: 5040, US: 2695, CA: 7495, INTL: 18495 },
   { through: 7560, US: 3995, CA: 10995, INTL: 27495 },
-  { through: 10080, US: 5295, CA: 14995, INTL: 36495 },
+  { through: 10000, US: 5295, CA: 14995, INTL: 36495 },
 ] as const
 
-export const MCP_MAX_CARDS = 10080
+export const MCP_MAX_CARDS = 10000
 export class McpQuantityError extends Error {
   readonly code = 'mcp_card_limit_exceeded'
-  constructor() { super('MCP orders are limited to 10,080 cards (560 sheets). Reduce the order quantity before checkout.') }
+  constructor() { super('MCP orders are limited to 10,000 cards (556 sheets). Reduce the order quantity before checkout.') }
 }
 
 // MCP-only policy. The quantity tier applies to every card, with a subtotal floor.
@@ -88,7 +88,7 @@ export function mcpQuote(quantity: number, country: string) {
     estimated_total_before_tax_cents: total,
     extra_cards_at_same_total_before_tax: price.extra_cards_at_same_printing_price,
     savings_message: mcpSavingsMessage(quantity), estimate_only: true,
-    note: 'MCP pricing uses one rate for every card: 35¢ each for orders of 1–180 cards, 30¢ each for 181–249, and 26¢ each for 250–10,080. The card subtotal is at least $34.95; this minimum is not added to the per-card total. Maximum 10,080 cards (560 sheets). Shipping is separate. Discounts cannot reduce cards below $34.95. Tax is confirmed at checkout.',
+    note: 'MCP pricing uses one rate for every card: 35¢ each for orders of 1–180 cards, 30¢ each for 181–249, and 26¢ each for 250–10,000. The card subtotal is at least $34.95; this minimum is not added to the per-card total. Maximum 10,000 cards (556 sheets). Shipping is separate. Discounts cannot reduce cards below $34.95. Tax is confirmed at checkout.',
   }
 }
 
