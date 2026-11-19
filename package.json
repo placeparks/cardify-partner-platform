@@ -5,7 +5,8 @@
   "engines": { "node": "24.x" },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run check:checkout && next build",
+    "check:checkout": "node scripts/check-checkout-routes.mjs && node --test scripts/check-checkout-routes.test.mjs scripts/prepaid-customer-payment.test.mjs",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
