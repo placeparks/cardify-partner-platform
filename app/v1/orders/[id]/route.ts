@@ -12,7 +12,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json(publicSandboxOrder(await sandboxOrder(db, key.partner_id, id)), { headers: { 'Cache-Control': 'no-store' } })
   }
   if (prepaidMode()==='test' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)) {
-    const quote:any=checked(await db.from('partner_prepaid_quotes').select('order_id,cart_id,simulated_status,created_at,order_funded_at,cart:partner_carts!inner(external_ref,card_count,mode)').eq('order_id',id).eq('partner_id',key.partner_id).eq('payment_mode','test').eq('cart.mode',key.mode).maybeSingle())
+    const quote:any=checked(await db.from('partner_prepaid_quotes').select('order_id,cart_id,simulated_status,created_at,order_funded_at,cart:partner_carts!partner_prepaid_quotes_cart_id_fkey!inner(external_ref,card_count,mode)').eq('order_id',id).eq('partner_id',key.partner_id).eq('payment_mode','test').eq('cart.mode',key.mode).maybeSingle())
     if (quote?.simulated_status) return NextResponse.json({id:quote.order_id,cart_id:quote.cart_id,status:quote.simulated_status,shipment:null,created_at:quote.order_funded_at,updated_at:quote.order_funded_at,external_ref:quote.cart.external_ref,card_count:quote.cart.card_count,mode:'test',simulated:true},{headers:{'Cache-Control':'no-store'}})
   }
   const order = checked(await db.from('partner_manufacturing_orders').select("id,cart_id,status,shipment,created_at,updated_at,cart:partner_carts(external_ref,card_count)").eq("id", id).eq("partner_id", key.partner_id).eq("mode", key.mode).maybeSingle()) as any
