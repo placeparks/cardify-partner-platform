@@ -42,7 +42,13 @@ export async function ensureCustomerCheckout(q:any) {
   }
   const session=await prepaidStripe('/checkout/sessions',params,`prepaid-customer-${q.id}`)
   checkSession(q,session)
-  if (!session.url || new URL(session.url).origin!=='https://checkout.stripe.com') throw new Error('Customer checkout URL unavailable')
+  // An idempotent create can return a session that has since expired or paid.
+  // Reconcile it even when Stripe no longer returns an active checkout URL.
+  if (session.status!=='open') return reconcileCustomerPayment(q.id,session.id)
+  // Stripe returns the account's custom domain when one is configured. This
+  // URL comes from the authenticated Stripe response, after identity checks.
+  const url=session.url ? new URL(session.url) : null
+  if (!url || url.protocol!=='https:' || url.username || url.password) throw new Error('Customer checkout URL unavailable')
   return creditRpc('partner_prepaid_bind_checkout',{p_quote:q.id,p_session:session.id,p_url:session.url,p_expires:new Date(session.expires_at*1000).toISOString()})
 }
 export async function reconcileCustomerPayment(id:string,suppliedSession?:string) {
