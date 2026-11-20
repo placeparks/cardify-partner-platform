@@ -39,22 +39,18 @@ async function maintain() {
     checked(await db.from("partner_artwork").update({state:"deleted",source_url:null,storage_path:null,print_storage_path:null,deleted_at:now}).eq("id",file.id).eq("legal_hold",false))
     result.deleted++
   }
-  const events = checked(await db.from("partner_webhook_events").select("*").is("delivered_at",null).lte("next_attempt_at",now).lt("attempts",12).limit(10)) || []
+  // Join receiver settings before limiting the queue. Unconfigured events stay
+  // intact and cannot starve configured receivers or spin on missing settings.
+  const events = checked(await db.rpc("partner_due_webhooks", { p_limit: 10 })) || []
   for (const event of events) {
     if (Date.now()-started > 45000) break
-    const settings = checked(await db.from("partner_webhook_settings").select("*").eq("partner_id",event.partner_id).eq("mode",event.mode).maybeSingle())
-    if (!settings) {
-      result.failures++
-      console.error(JSON.stringify({event:"partner_webhook_delivery",event_id:event.id,mode:event.mode,reason:"receiver_not_configured",attempt:event.attempts}))
-      continue
-    }
     let delivered = false
     let status: number | null = null
     let reason = "receiver_request_failed"
     try {
       const raw = JSON.stringify(event.payload), timestamp = Math.floor(Date.now()/1000)
-      const signature = createHmac("sha256",decrypt(settings.secret_ciphertext)).update(`${timestamp}.${raw}`).digest("hex")
-      const response = await safeRequest(settings.url,{method:"POST",body:raw,headers:{"Content-Type":"application/json","TCGP-Signature":`t=${timestamp},v1=${signature}`},maxBytes:64_000})
+      const signature = createHmac("sha256",decrypt(event.secret_ciphertext)).update(`${timestamp}.${raw}`).digest("hex")
+      const response = await safeRequest(event.url,{method:"POST",body:raw,headers:{"Content-Type":"application/json","TCGP-Signature":`t=${timestamp},v1=${signature}`},maxBytes:64_000})
       delivered = response.status >= 200 && response.status < 300
       status = response.status
       reason = delivered ? "acknowledged" : "receiver_non_2xx"
