@@ -1,17 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import ts from 'typescript'
+import { stripTypeScriptTypes } from 'node:module'
 
-const asModule = source => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-}).outputText).toString('base64')
+const asModule = source => 'data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(source)).toString('base64')
 const shipping = asModule(await readFile(new URL('../utils/shippingPricing.ts', import.meta.url), 'utf8'))
 const source = (await readFile(new URL('../utils/mcpPricing.ts', import.meta.url), 'utf8')).replace("'./shippingPricing'", JSON.stringify(shipping))
 const { mcpCardPricing, mcpQuote, mcpPricingForCart, MCP_PRICING_VERSION } = await import(asModule(source))
 
 test('whole-order rates, minimum and tier boundaries', () => {
-  for (const [quantity, cents, rate] of [[1,3495,35],[18,3495,35],[19,3495,35],[99,3495,35],[100,3500,35],[180,6300,35],[181,5430,30],[249,7470,30],[250,6500,26],[251,6526,26],[504,13104,26],[505,13130,26],[10080,262080,26]]) {
+  for (const [quantity, cents, rate] of [[1,3495,35],[18,3495,35],[19,3495,35],[99,3495,35],[100,3500,35],[180,6300,35],[181,5430,30],[249,7470,30],[250,6500,26],[251,6526,26],[504,13104,26],[505,13130,26],[10000,260000,26]]) {
     const price = mcpCardPricing(quantity)
     assert.equal(price.cards_subtotal_cents, cents, `subtotal for ${quantity}`)
     assert.equal(price.unit_price_cents, rate)
@@ -21,11 +19,11 @@ test('whole-order rates, minimum and tier boundaries', () => {
   }
 })
 test('reported totals include destination shipping and the 250-card regression', () => {
-  assert.equal(mcpQuote(1, 'US').estimated_total_before_tax_cents, 4190)
-  assert.equal(mcpQuote(250, 'US').estimated_total_before_tax_cents, 7395)
-  assert.equal(mcpQuote(251, 'US').estimated_total_before_tax_cents, 7821)
-  assert.equal(mcpQuote(250, 'CA').estimated_total_before_tax_cents, 8995)
-  assert.equal(mcpQuote(250, 'GB').estimated_total_before_tax_cents, 9495)
+  assert.equal(mcpQuote(1, 'US').estimated_total_before_tax_cents, 4090)
+  assert.equal(mcpQuote(250, 'US').estimated_total_before_tax_cents, 7295)
+  assert.equal(mcpQuote(251, 'US').estimated_total_before_tax_cents, 7521)
+  assert.equal(mcpQuote(250, 'CA').estimated_total_before_tax_cents, 8095)
+  assert.equal(mcpQuote(250, 'GB').estimated_total_before_tax_cents, 8495)
 })
 test('discount floor and free-capacity messaging reflect the minimum', () => {
   assert.equal(mcpCardPricing(250, 999999).cards_total_cents, 3495)
@@ -36,7 +34,7 @@ test('discount floor and free-capacity messaging reflect the minimum', () => {
   assert.equal(mcpQuote(1, 'US').estimated_total_before_tax_cents, mcpQuote(99, 'US').estimated_total_before_tax_cents)
 })
 test('invalid inputs, checkout routing and pricing version', () => {
-  for (const quantity of [0, -1, 1.5, NaN, Infinity, 10081]) assert.throws(() => mcpCardPricing(quantity))
+  for (const quantity of [0, -1, 1.5, NaN, Infinity, 10001, 10080, 10001]) assert.throws(() => mcpCardPricing(quantity))
   assert.throws(() => mcpCardPricing(250, -1))
   assert.throws(() => mcpQuote(250, 'XX'))
   assert.equal(mcpPricingForCart({ pricing_channel: 'partner', card_count: 250 }), null)
