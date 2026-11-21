@@ -7,12 +7,13 @@ export const ALLOWED_COUNTRIES = [
   'MY', 'TH', 'PH', 'ID', 'VN', 'IN', 'AE', 'SA', 'IL', 'TR',
   'ZA', 'BR', 'AR', 'CL', 'PE', 'CO',
 ]
-const SHIPPING_TIERS = [
-  { maxQty:100,US:6.95,CA:18.95,INTL:24.95 },
-  { maxQty:250,US:8.95,CA:24.95,INTL:29.95 },
-  { maxQty:500,US:12.95,CA:32.95,INTL:42.95 },
-  { maxQty:Infinity,US:18.95,CA:44.95,INTL:54.95 },
-]
+// Card-order shipping in USD. Used by checkout, calculators and public tables.
+export const SHIPPING_TIERS = [
+  { maxQty: 100, US: 5.95, CA: 10.95, INTL: 14.95 },
+  { maxQty: 250, US: 7.95, CA: 15.95, INTL: 19.95 },
+  { maxQty: 500, US: 9.95, CA: 19.95, INTL: 26.95 },
+  { maxQty: Infinity, US: 12.95, CA: 29.95, INTL: 39.95 },
+] as const
 export function getShippingCost(country: string,quantity: number): number {
   const tier=SHIPPING_TIERS.find(t=>quantity<=t.maxQty) || SHIPPING_TIERS[SHIPPING_TIERS.length-1]
   return country==='US'?tier.US:country==='CA'?tier.CA:tier.INTL

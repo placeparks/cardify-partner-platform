@@ -1,18 +1,11 @@
-import { ALLOWED_COUNTRIES } from './shippingPricing'
-
-export const MCP_SHIPPING_TIERS = [
-  { through: 100, US: 695, CA: 1895, INTL: 2495 },
-  { through: 250, US: 895, CA: 2495, INTL: 2995 },
-  { through: 500, US: 1295, CA: 3295, INTL: 4295 },
-  { through: 792, US: 1895, CA: 4495, INTL: 5495 },
-  { through: 1008, US: 1895, CA: 4495, INTL: 6495 },
-  { through: 3024, US: 1895, CA: 4495, INTL: 10495 },
-  { through: 5040, US: 2695, CA: 7495, INTL: 18495 },
-  { through: 7560, US: 3995, CA: 10995, INTL: 27495 },
-  { through: 10000, US: 5295, CA: 14995, INTL: 36495 },
-] as const
+import { ALLOWED_COUNTRIES, SHIPPING_TIERS } from './shippingPricing'
 
 export const MCP_MAX_CARDS = 10000
+// MCP shares the retail shipping schedule, capped at its existing card limit.
+export const MCP_SHIPPING_TIERS = SHIPPING_TIERS.map(tier => ({
+  through: Math.min(tier.maxQty, MCP_MAX_CARDS),
+  US: Math.round(tier.US * 100), CA: Math.round(tier.CA * 100), INTL: Math.round(tier.INTL * 100),
+}))
 export class McpQuantityError extends Error {
   readonly code = 'mcp_card_limit_exceeded'
   constructor() { super('MCP orders are limited to 10,000 cards (556 sheets). Reduce the order quantity before checkout.') }
