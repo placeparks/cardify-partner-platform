@@ -64,7 +64,7 @@ export default function McpPricingCalculator() {
     <details className={styles.shippingTable}>
       <summary>View all MCP shipping rates</summary>
       <div><table>
-        <caption>Card-order shipping in USD · same rates for website, API and widget orders</caption>
+        <caption>Shipping in USD</caption>
         <thead><tr><th scope="col">Cards</th><th scope="col">US</th><th scope="col">Canada</th><th scope="col">Worldwide</th></tr></thead>
         <tbody>{MCP_SHIPPING_TIERS.map((tier, index) => <tr key={tier.through}>
           <th scope="row">{(index ? MCP_SHIPPING_TIERS[index - 1].through + 1 : 1).toLocaleString()}–{tier.through.toLocaleString()}</th>
