@@ -4,24 +4,19 @@
  * Revenue calculator - interactive economics section.
  * Pricing mirrors the live rate config:
  *   fulfillment = $0.35/card + shipping tier + 3% processing buffer
- * Partner take = retail - fulfillment. Update RATES here if rate_config changes.
+ * Partner take = retail - fulfillment. Shipping uses the shared card-order schedule.
  */
 
 import { useMemo, useState } from "react"
+import { getShippingCost } from '../utils/shippingPricing'
 import Link from "next/link"
 import { TrendingUp } from "lucide-react"
 
 const BASE_CARD_RATE_CENTS = 35
 const BUFFER_PCT = 3
-const US_SHIPPING_TIERS = [
-  { maxCards: 100, cents: 499 },
-  { maxCards: 500, cents: 899 },
-  { maxCards: 2000, cents: 1499 },
-]
 
 function shippingCents(cards: number) {
-  const tier = US_SHIPPING_TIERS.find((t) => cards <= t.maxCards)
-  return (tier ?? US_SHIPPING_TIERS[US_SHIPPING_TIERS.length - 1]).cents
+  return Math.round(getShippingCost('US', cards) * 100)
 }
 
 const usd = (cents: number) =>
